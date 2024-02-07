@@ -1,3 +1,4 @@
+#import Pkg; Pkg.add("Distributions")
 using Distributions
 
 function sample_next(previous_point)
