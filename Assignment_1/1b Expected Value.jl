@@ -8,24 +8,22 @@ using Distributions
 include("02435_Assignment_A_codes/02435_two_stage_problem_data.jl")
 number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
 
-# Load demand data from WH_simulation_experiments.jl function simulation_experiments_creation()
-include("02435_Assignment_A_codes/WH_simulation_experiments.jl")
-number_of_experiments, Expers, demand_trajectory, price_trajectory = simulation_experiments_creation(number_of_warehouses, W, number_of_simulation_periods)
-# take only one experiment of demand and price
-demand = demand_trajectory[1,:,:]
-price = price_trajectory[1,:,:]
+# Generate random data for day 1
+price = rand(Uniform(0,10),10,10)
 
 # Include the file containing the price process function
 include("02435_Assignment_A_codes/price_process.jl")
 
 function calculate_expected_prices(price)
-   
-        num_samples = 1000
-        expected_price = zeros(size(price))  # Initialize expected prices matrix
-        
-        for w in 1:size(price, 1)  # Loop through each warehouse
-            initial_prices = vec(price[w, 1, :])  # Extract initial prices as a vector
-            expected_price_tmp = zeros(size(price, 2), size(price, 3))  # Temporary variable for storing expected prices
+         
+    #     return expected_price
+    num_samples = 1000
+    expected_price = zeros(size(price))  # Initialize expected prices matrix
+
+    for w in 1:size(price, 1)  # Loop through each warehouse
+        for t in 1:size(price, 3)  # Loop through each time period
+            initial_prices = price[w, 1, t]  # Extract initial prices as a scalar or vector
+            expected_price_tmp = zeros(size(price, 2))  # Temporary variable for storing expected prices
             
             for i in 1:num_samples
                 price_sample = sample_next(initial_prices)  # Use initial prices as input to sample_next
@@ -33,11 +31,14 @@ function calculate_expected_prices(price)
             end
             
             expected_price_tmp ./= num_samples  # Average over samples
-            expected_price[w, :, :] = expected_price_tmp  # Assign expected prices back to the main matrix
+            expected_price[w, :, t] = expected_price_tmp  # Assign expected prices back to the main matrix
         end
-        
-        return expected_price
     end
+    
+    return expected_price
+    
+end
+
     
 
 function make_EV_here_and_now_decision(price)
@@ -52,37 +53,40 @@ function make_EV_here_and_now_decision(price)
     @variable(model_ev, 0 <= y_send_wqt[w in W, q in W, t in 1:2]) # Coffee sent from warehouse w to warehouse q in period t
     @variable(model_ev, 0 <= y_receive_wqt[w in W, q in W, t in 1:2]) # Coffee received at warehouse w from warehouse q in period t
     @variable(model_ev, 0 <= m_wt[w in W, t in 1:2]) # Missing demand at warehouse w in period t
-    
+
+    demand_fixed = 4 
+    initial_stock = 2
+
     # Define the objective function
-    @objective(model_ev, Min, sum(expected_price * x_wt[w,t] for w in W, t in 1:2) 
+    @objective(model_ev, Min, sum(expected_price[w,t] * x_wt[w,t] for w in W, t in 1:2) 
                             + sum(cost_miss[w] * m_wt[w,t] for w in W, t in 1:2) 
                             + sum(cost_tr[w,q] * y_send_wqt[w,q,t] for w in W, q in W, t in 1:2))
 
     # Define the constraints
     # initial_stock
-    @constraint(model_ev, ini_stock[w in W], z_wt[w,1] == initial_stock[w])
+    @constraint(model_ev, ini_stock[w in W], z_wt[w,1] == initial_stock)
 
     # demand hour 1
-    @constraint(model_ev, demand_fulfillment_t0[w in W],
+    @constraint(model_ev, demand_t0[w in W],
                 x_wt[w,1] + z_wt[w,1]
                 + sum(y_receive_wqt[w,q,1] for q in W)
                 - sum(y_send_wqt[w,q,1] for q in W)
-                + m_wt[w,1] == demand[w,1])
+                + m_wt[w,1] == demand_fixed)
     
     # demand hour 2
-    @constraint(model_ev, demand_fulfillment[w in W],
+    @constraint(model_ev, demand_t[w in W],
                 x_wt[w,2] + z_wt[w,2] - z_wt[w,1]
                 + sum(y_receive_wqt[w,q,2] for q in W) 
                 - sum(y_send_wqt[w,q,2] for q in W)
-                + m_wt[w,2] == demand[w,2])
+                + m_wt[w,2] == demand_fixed)
     
     # Storage capacity
     @constraint(model_ev, storage_capacity[w in W],
-                z_wt[w,1] <= storage_capacity[w])
+                z_wt[w,1] <= warehouse_capacities[w])
 
     # Transportation capacity
     @constraint(model_ev, transportation_capacity[w in W, q in W],
-                y_send_wqt[w,q,1] <= transport_capacity[w,q])
+                y_send_wqt[w,q,1] <= transport_capacities[w,q])
 
     # Constraint to prevent transfers to the same warehouse
     @constraint(model_ev, no_self_transfer[w in W], y_send_wqt[w,w,1] == 0)
@@ -94,6 +98,8 @@ function make_EV_here_and_now_decision(price)
     # storage duration before transfer
     @constraint(model_ev, storage_before_transfer[w in W, q in W],
                 y_send_wqt[w,q,1] <= z_wt[w,1])
+    @constraint(model_ev, storage_before_transfer_t1[w in W, q in W],
+    y_send_wqt[w,q,1] <= initial_stock)
     
     # Solve the model
     optimize!(model_ev)
