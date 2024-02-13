@@ -112,5 +112,5 @@ end
 end
 
 # Run model for the given price
-Calculate_OiH_solution(price)
+Calculate_OiH_solution(p_wt)
 # comments: Might be working now. At least it is ordering at the right hours, but it is still not sending to other warehouses.
