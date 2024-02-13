@@ -5,14 +5,14 @@ using Printf
 using Distributions
 
 # Load data from 02435_two_stage_problem_data.jl function load_the_data()
-include("02435_Assignment_A_codes/02435_two_stage_problem_data.jl")
+include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
 number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
 
 # Generate random data for day 1
 price = rand(Uniform(0,10),10,10)
 
 # Include the file containing the price process function
-include("02435_Assignment_A_codes/price_process.jl")
+include("V2_Assignment_A_codes/V2_price_process.jl")
 
 function calculate_expected_prices(price)
          
@@ -82,22 +82,22 @@ function make_EV_here_and_now_decision(price)
     
     # Storage capacity
     @constraint(model_ev, storage_capacity[w in W],
-                z_wt[w,1] <= warehouse_capacities[w])
+                z_wt[w,1] <= warehouse_capacities[w]) # Should z_wt be z_wt[w,t]?
 
     # Transportation capacity
     @constraint(model_ev, transportation_capacity[w in W, q in W],
-                y_send_wqt[w,q,1] <= transport_capacities[w,q])
+                y_send_wqt[w,q,1] <= transport_capacities[w,q]) # Should y_send_wqt be y_send_wqt[w,q,t]?
 
     # Constraint to prevent transfers to the same warehouse
-    @constraint(model_ev, no_self_transfer[w in W], y_send_wqt[w,w,1] == 0)
+    @constraint(model_ev, no_self_transfer[w in W], y_send_wqt[w,w,1] == 0) # Should y_send_wqt be y_send_wqt[w,w,t]?
 
     # constraint saying the amount sent from w to q is the same as received at q from w
     @constraint(model_ev, send_receive[w in W, q in W], 
-                y_send_wqt[w,q,1] == y_receive_wqt[q,w,1])
+                y_send_wqt[w,q,1] == y_receive_wqt[q,w,1]) # Should y_send_wqt be y_send_wqt[w,q,t] and y_receive_wqt be y_receive_wqt[w,q,t]?
 
     # storage duration before transfer
     @constraint(model_ev, storage_before_transfer[w in W, q in W],
-                y_send_wqt[w,q,1] <= z_wt[w,1])
+                y_send_wqt[w,q,1] <= z_wt[w,1]) # Should y_send_wqt be y_send_wqt[w,q,t] and z_wt be z_wt[w,t]?
     @constraint(model_ev, storage_before_transfer_t1[w in W, q in W],
     y_send_wqt[w,q,1] <= initial_stock)
     

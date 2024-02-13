@@ -5,7 +5,7 @@ function load_the_data()
     number_of_warehouses = 3
     W = collect(1:number_of_warehouses)
 
-    number_of_simulation_periods = 2
+    number_of_simulation_periods = 5
     sim_T = collect(1:number_of_simulation_periods)
 
     #Cost of missing demand at w
