@@ -18,7 +18,7 @@ p_wt = price_trajectory[1,:,:]
 
 function Calculate_OiH_solution(price)
     
-    # Define the model
+# Define the model
     model_1c = Model(Gurobi.Optimizer)
 
     # Variables
@@ -31,40 +31,25 @@ function Calculate_OiH_solution(price)
     # Define the objective function
     @objective(model_1c, Min, sum(p_wt[w,t] * x_wt[w,t] for w in W, t in sim_T) 
                             + sum(cost_miss[w] * m_wt[w,t] for w in W, t in sim_T) 
-                            + sum(cost_tr[w,q] * y_receive_qwt[q,w,t] for q in W, w in W, t in sim_T))
+                            + (sum(cost_tr[w,q] * y_send_wqt[w,q,t] for w in W, q in W, t in sim_T)
+                            + sum(cost_tr[q,w] * y_receive_qwt[q,w,t] for q in W, w in W, t in sim_T))/2)
 
     # Define the constraints
-    # initial_stock
-    @constraint(model_1c, ini_stock[w in W], z_wt[w,1] == initial_stock[w])
 
     # demand hour 1
-    @constraint(model_1c, demand_fulfillment_t0[w in W],
-                x_wt[w,1] + z_wt[w,1]
+    @constraint(model_1c, demand_fulfillment_t0[w in W, q in W],
+                x_wt[w,1] - z_wt[w,1] + initial_stock[w]
                 + sum(y_receive_qwt[q,w,1] for q in W)
-                - sum(y_send_wqt[w,q,1] for q in W)
-                + m_wt[w,1] == demand[w,1] + z_wt[w, 1+1])
+                - sum(y_send_wqt[w,q,1] for w in W)
+                + m_wt[w,1] == demand[w,1])
 
     #demand hour t
-    @constraint(model_1c, demand_fulfillment[w in W, t in sim_T[2:end-1]],
-                x_wt[w,t] + z_wt[w,t]
+    @constraint(model_1c, demand_fulfillment[w in W, q in W, t in sim_T[2:end]],
+                x_wt[w,t] - z_wt[w,t] + z_wt[w,t-1]
                 + sum(y_receive_qwt[q,w,t] for q in W) 
-                - sum(y_send_wqt[w,q,t] for q in W)
-                + m_wt[w,t] == demand[w,t] + z_wt[w, t+1])
+                - sum(y_send_wqt[w,q,t] for w in W)
+                + m_wt[w,t] == demand[w,t])
 
-    # demand at last hour
-    @constraint(model_1c, demand_fulfillment_last[w in W],
-                x_wt[w,sim_T[end]] + z_wt[w,sim_T[end]]
-                + sum(y_receive_qwt[q,w,sim_T[end]] for q in W) 
-                - sum(y_send_wqt[w,q,sim_T[end]] for q in W)
-                + m_wt[w,sim_T[end]] == demand[w,sim_T[end]])
-
-    # alternative
-    # @constraint(model_1c, update_storage[w in W, t in sim_T[2:end]],
-    #             z_wt[w,t] == z_wt[w,t-1] + x_wt[w,t-1] 
-    #             + sum(y_receive_qwt[q,w,t-1] for q in W) 
-    #             - sum(y_send_wqt[w,q,t-1] for q in W) 
-    #             - demand[w,t-1] + m_wt[w,t-1])
-    
     # Storage capacity
     @constraint(model_1c, storage_capacity[w in W, t in sim_T],
                 z_wt[w,t] <= warehouse_capacities[w])
@@ -73,16 +58,17 @@ function Calculate_OiH_solution(price)
     @constraint(model_1c, transportation_capacity[w in W, q in W, t in sim_T],
                 y_send_wqt[w,q,t] <= transport_capacities[w,q])
 
-    # constraint saying the amount sent from w to q is the same as received at q from w
+    # # # constraint saying the amount sent from w to q is the same as received at q from w
     @constraint(model_1c, send_receive[w in W, q in W, t in sim_T], 
-                y_send_wqt[w,q,t] == y_receive_qwt[q,w,t])
+                 y_send_wqt[w,q,t] == y_receive_qwt[q,w,t])
 
-    # storage duration before transfer
-    @constraint(model_1c, storage_before_transfer_t1[w in W, q in W],
+
+    #Storage before transfer
+    @constraint(model_1c, storage_t1[w in W, q in W],
                 y_send_wqt[w,q,1] <= initial_stock[w])
-    
+
     @constraint(model_1c, storage_before_transfer[w in W, q in W, t in sim_T[2:end]],
-                y_send_wqt[w,q,t] <= z_wt[w,t-1] + x_wt[w,t-1])
+                y_send_wqt[w,q,t] <= z_wt[w,t-1])
                 
     # Solve the model
     optimize!(model_1c)
@@ -108,7 +94,8 @@ function Calculate_OiH_solution(price)
         println("Total system cost: ", system_cost)
     else
         println("No solution found")
-end 
+    end 
+    return 
 end
 
 # Run model for the given price
