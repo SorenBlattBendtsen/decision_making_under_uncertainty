@@ -1,4 +1,3 @@
-#import Pkg; Pkg.add("Distributions")
 using Distributions
 
 function sample_next(previous_point)
@@ -13,6 +12,14 @@ function sample_next(previous_point)
         sample = 10
     end
 
-    return sample
+    rand_num = rand()
+
+    if rand_num < 0.9
+        price_sample = sample
+    else
+        price_sample = 10
+    end
+
+    return price_sample
 
 end

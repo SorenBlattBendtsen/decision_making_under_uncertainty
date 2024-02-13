@@ -31,7 +31,7 @@ function check_feasibility(x, send, receive, z, m, current_stock, current_demand
             stock_positivity[w] = z[w]
             delay_residual[w] = current_stock[w] - sum(send[w,q] for q in W)
             balance_residual[w] = current_stock[w] + x[w] + sum(receive[w,q] - send[w,q] for q in W) - current_demands[w] + m[w] - z[w]
-            capacity_residual[w] = current_stock[w] - warehouse_capacities[w]
+            capacity_residual[w] = warehouse_capacities[w] - current_stock[w]
         for q in W
             transport_residual[w,q] = transport_capacities[w,q] - send[w,q]
             consistency_residual[w,q] = send[w,q] - receive[q,w]

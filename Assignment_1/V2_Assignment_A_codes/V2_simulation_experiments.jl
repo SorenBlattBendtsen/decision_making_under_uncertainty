@@ -1,12 +1,10 @@
 using Random
-include("price_process.jl")
+include("V2_price_process.jl")
 
 function simulation_experiments_creation(number_of_warehouses, W, number_of_periods)
 
     number_of_experiments = 40
     Expers = collect(1:number_of_experiments)
-
-    demand_trajectory = 4*ones(number_of_experiments, number_of_warehouses, number_of_periods)
 
     initial_prices = zeros(number_of_experiments, number_of_warehouses)
     price_trajectory = zeros(number_of_experiments, number_of_warehouses, number_of_periods)
@@ -21,6 +19,6 @@ function simulation_experiments_creation(number_of_warehouses, W, number_of_peri
     end
 
 
-    return number_of_experiments, Expers, demand_trajectory, price_trajectory
+    return number_of_experiments, Expers, price_trajectory
 end
 #end

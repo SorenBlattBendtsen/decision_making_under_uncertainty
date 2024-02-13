@@ -7,19 +7,18 @@
 
 # Including your policy and the dummy policy
 include("02435_multistage_policy.jl")
-include("dummy_policy.jl")
+include("V2_dummy_policy.jl")
 
-
-include("02435_multistage_problem_data.jl")
+include("V2_02435_multistage_problem_data.jl")
 # Loading the problem's parameters
-number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_sim_periods, sim_T, degradation_factor = load_the_data()
+number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_sim_periods, sim_T, demand_trajectory = load_the_data()
 
-include("WH_simulation_experiments.jl")
+include("V2_simulation_experiments.jl")
 # Creating the random experiments on which the policy will be evaluated
-number_of_experiments, Expers, Demand_experiments, Price_experiments = simulation_experiments_creation(number_of_warehouses, W, number_of_sim_periods)
+number_of_experiments, Expers, Price_experiments = simulation_experiments_creation(number_of_warehouses, W, number_of_sim_periods)
 
 # Including a function that checks if your policy's decisions are feasible
-include("WH_feasibility_check.jl")
+include("V2_feasibility_check.jl")
 
 # Initialization of the decision variables and policy cost
 x = Dict()
@@ -38,15 +37,16 @@ for e in Expers
         if tau == 1
             current_stock = initial_stock
         else
-            current_stock = z[(e,tau-1)]*degradation_factor
+            current_stock = z[(e,tau-1)]
         end
         # Observe current demands and prices
-        current_demands = Demand_experiments[e,:,tau]
+        current_demands = demand_trajectory[:,tau]
         current_prices = Price_experiments[e,:,tau]
 
         # Call policy to make a decision for here and now
-        x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)] = make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, Demand_experiments, current_prices)
-
+        x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)] = make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices)
+        
+        
         #Check whether the policy's here and now decisions are feasible/meaningful
         successful = check_feasibility(x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)], current_stock, current_demands,  warehouse_capacities, transport_capacities)
         # If not, then the policy's decisions are discarded for this timeslot, and the dummy policy is used instead
