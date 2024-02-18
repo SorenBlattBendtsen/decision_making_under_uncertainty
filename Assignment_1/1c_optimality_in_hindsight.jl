@@ -45,7 +45,7 @@ function Calculate_OiH_solution(price)
     #demand hour t
     @constraint(model_1c, demand_fulfillment[w in W, t in sim_T[2:end]],
                 x_wt[w,t] - z_wt[w,t] + z_wt[w,t-1]
-                + sum(y_receive_wqt[q,w,t] for q in W) 
+                + sum(y_receive_wqt[w,q,t] for q in W) 
                 - sum(y_send_wqt[w,q,t] for q in W)
                 + m_wt[w,t] == demand[w,t])
 
