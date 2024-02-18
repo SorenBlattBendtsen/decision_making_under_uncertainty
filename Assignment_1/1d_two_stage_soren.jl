@@ -71,7 +71,7 @@ function Make_Stochastic_here_and_now_decision(price, S, N)
     #demand scenarios
     @constraint(model_1d, demand_fulfillmen_scenarios[w in W, t in sim_T[1:end-1], s in N],
                 x_wt_scenarios[w,t+1,s] - z_wt[w,t+1] + z_wt[w,t]
-                + sum(y_receive_wqt_scen[q,w,t+1,s] for q in W) 
+                + sum(y_receive_wqt_scen[w,q,t+1,s] for q in W) 
                 - sum(y_send_wqt_scen[w,q,t+1,s] for q in W)
                 + m_wt_scen[w,t+1,s] == demand[w,t+1])
 
