@@ -18,9 +18,9 @@ p_wt = price_trajectory[1,:,1]
 include("V2_Assignment_A_codes/V2_price_process.jl")
 S = 1000
 
-function Make_Stochastic_here_and_now_decision(price, S, N)
-    model_1d = Model(Gurobi.Optimizer)
+model_1d = Model(Gurobi.Optimizer)
 
+function Scenario_generation(prices, probabilities, scenarios)
     p_wt_scenarios = zeros(S, number_of_warehouses)
     for s in 1:S
         for w in W
@@ -29,9 +29,56 @@ function Make_Stochastic_here_and_now_decision(price, S, N)
     end
     # take N scenarios
     #p_wt = p_wt_scenarios[1,:]
-    p_wt_scenarios = p_wt_scenarios[1:N,:]
+    prices = p_wt_scenarios[1:N,:]
 
+    #Number of samples
+    num_samples = 100
+    sample_length = n
 
+    samples = zeros(Float64,sample_length, num_samples)
+    for i = 1:num_samples
+        t = 1
+        while t < sample_length
+            #Draw random block
+            r = rand(1:length(blocks))
+            #Copy block content to sample
+            for j = 0:blocksize-1
+                samples[t+j,i] = blocks[r][j+1]
+            end
+            t = t+ blocksize
+        end
+
+    end
+
+    #Calculate distance matrix (euclidean distance)
+    D = zeros(Float64, num_samples,num_samples)
+    for i = 1:num_samples
+        for j = 1:num_samples
+            D[i,j] = sqrt(sum((samples[l,i]-samples[l,j])*(samples[l,i]-samples[l,j])  for l = 1:sample_length))
+        end
+    end
+
+    #Number of scenarios to selected
+    num_reduced = 5
+    #Initialize equiprobable probabilities
+    probabilities = repeat([1.0/num_samples], 1, num_samples)[1,:]
+
+    include("fast-forward-selection.jl")
+    result = FastForwardSelection(D, probabilities, num_reduced)
+    #Resulting probabilities
+    print(result[1])
+    #Selected scenario indices
+    print(result[2])
+    
+    return probabilities, prices, scenarios
+end    
+
+function Make_Stochastic_here_and_now_decision(price, S, N)
+
+    probability = Scenario_generation(probabilities)
+    N = Scenario_generation(scenarios)
+    p_wt_scenarios = Scenario_generation(price)
+    
     # Variables, 1st stage and 2nd stage
     @variable(model_1d, 0 <= x_wt[w in W, t in sim_T]) # Coffee ordered at warehouse w in period t
     @variable(model_1d, 0 <= z_wt[w in W, t in sim_T]) # Coffee stored at warehouse w in period t
@@ -46,9 +93,9 @@ function Make_Stochastic_here_and_now_decision(price, S, N)
     @objective(model_1d, Min, sum(p_wt[w]*x_wt[w,t] for w in W, t in sim_T) 
                             + sum(cost_miss[w]*m_wt[w,t] for w in W, t in sim_T) 
                             + sum(cost_tr[w,q]*y_send_wqt[w,q,t] for w in W, q in W, t in sim_T)
-                            + sum(1/N * p_wt_scenarios[s, w]*x_wt_scenarios[w,t+1,s] for w in W, t in sim_T[1:end-1], s in N)
-                            + sum(1/N * cost_miss[w]*m_wt_scen[w,t+1,s] for w in W, t in sim_T[1:end-1], s in N)
-                            + sum(1/N * cost_tr[w,q]*y_send_wqt_scen[w,q,t+1,s] for w in W, q in W, t in sim_T[1:end-1], s in N)
+                            + sum(probability * p_wt_scenarios[s, w]*x_wt_scenarios[w,t+1,s] for w in W, t in sim_T[1:end-1], s in N)
+                            + sum(probability * cost_miss[w]*m_wt_scen[w,t+1,s] for w in W, t in sim_T[1:end-1], s in N)
+                            + sum(probability* cost_tr[w,q]*y_send_wqt_scen[w,q,t+1,s] for w in W, q in W, t in sim_T[1:end-1], s in N)
                             )
 
     # Define the constraints
