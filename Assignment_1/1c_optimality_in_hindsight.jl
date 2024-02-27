@@ -4,16 +4,16 @@ using JuMP
 using Gurobi
 using Printf
 
-# Load data from 02435_two_stage_problem_data.jl function load_the_data()
-include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
-number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
+# # Load data from 02435_two_stage_problem_data.jl function load_the_data()
+# include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
+# number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
 
-# Load demand data from WH_simulation_experiments.jl function simulation_experiments_creation()
-include("V2_Assignment_A_codes/V2_simulation_experiments.jl")
-number_of_experiments, Expers, price_trajectory = simulation_experiments_creation(number_of_warehouses, W, number_of_simulation_periods)
-# Constant demand and 1 experiment of price for all warehouses and all periods
-demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
-p_wt = price_trajectory[1,:,:]
+# # Load demand data from WH_simulation_experiments.jl function simulation_experiments_creation()
+# include("V2_Assignment_A_codes/V2_simulation_experiments.jl")
+# number_of_experiments, Expers, price_trajectory = simulation_experiments_creation(number_of_warehouses, W, number_of_simulation_periods)
+# # Constant demand and 1 experiment of price for all warehouses and all periods
+# demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
+# p_wt = price_trajectory[1,:,:]
 
 # Function to calculate the optimal solution in hindsight 
 function Calculate_OiH_solution(price)
@@ -29,7 +29,7 @@ function Calculate_OiH_solution(price)
     @variable(model_1c, 0 <= m_wt[w in W, t in sim_T]) # Missing demand at warehouse w in period t
 
     # Define the objective function
-    @objective(model_1c, Min, sum(p_wt[w,t] * x_wt[w,t] for w in W, t in sim_T) 
+    @objective(model_1c, Min, sum(price[w,t] * x_wt[w,t] for w in W, t in sim_T) 
                             + sum(cost_miss[w] * m_wt[w,t] for w in W, t in sim_T) 
                             + sum(cost_tr[w,q] * y_send_wqt[w,q,t] for w in W, q in W, t in sim_T))
 
@@ -92,8 +92,8 @@ function Calculate_OiH_solution(price)
     else
         println("No solution found")
     end 
-    return system_cost, value.(x_wt), value.(z_wt), value.(y_send_wqt), value.(y_receive_wqt)
+    return system_cost
 end
 
 # Run model for the given price
-Calculate_OiH_solution(p_wt)
+#Calculate_OiH_solution(p_wt)

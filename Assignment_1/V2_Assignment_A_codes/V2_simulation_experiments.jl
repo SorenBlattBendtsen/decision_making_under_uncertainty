@@ -3,7 +3,7 @@ include("V2_price_process.jl")
 
 function simulation_experiments_creation(number_of_warehouses, W, number_of_periods)
 
-    number_of_experiments = 40
+    number_of_experiments = 100
     Expers = collect(1:number_of_experiments)
 
     initial_prices = zeros(number_of_experiments, number_of_warehouses)

@@ -9,81 +9,96 @@ using Random
 # random seed for reproducability
 Random.seed!(1234)
 
-# Load data from 02435_two_stage_problem_data.jl function load_the_data()
+# Include files for input data
 include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
 number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
-
-# Constant demand for all warehouses and all periods
-demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
 
 include("V2_Assignment_A_codes/V2_simulation_experiments.jl")
 number_of_experiments, Expers, price_trajectory = simulation_experiments_creation(number_of_warehouses, W, number_of_simulation_periods)
 
-# Generate random data for day 1
-price = rand(Uniform(0,10),10,10)
-
 include("V2_Assignment_A_codes/V2_price_process.jl")
-# 1000 scenarios, 10 reduced scenarios
-S = 1000
-num_reduced = 10
 
+# Constant demand for all warehouses and all periods
+demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
 
-#Load the optimality in hindsight program
-include("1c_optimality_in_hindsight.jl")
-result = Calculate_OiH_solution(price)
-
-system_cost, x_values, z_values, y_send_values, y_receive_values = Calculate_OiH_solution(price)
-
-#Load the Expected Value Program
-include("1b Expected Value.jl")
-expected_price = calculate_expected_prices(price)
-result_EV = make_EV_here_and_now_decision(price)
-
-system_cost, prices_day_1, orders_day_1, storage_day_1, send_receive_day_1,
-expected_prices_day_2, orders_day_2, storage_day_2, send_receive_day_2 = result_EV
-
-
-#Load the Two-Stage Program
-include("1d_two_stage.jl")
-scen_gen = Scenario_generation(price, S, number_of_warehouses, num_reduced, plots=true)
-
-num_reduced_values = [5, 20, 50]
-
-# Dictionaries to store results for each num_reduced value
-system_costs_dict = Dict()
-prices_day_1_dict = Dict()
-orders_day_1_dict = Dict()
-storage_day_1_dict = Dict()
-send_receive_day_1_dict = Dict()
-prices_day_2_dict = Dict()
-orders_day_2_dict = Dict()
-storage_day_2_dict = Dict()
-send_receive_day_2_dict = Dict()
-
-# Loop through each num_reduced value and call the function
-for num_reduced in num_reduced_values
-    println("Running for num_reduced = $num_reduced")
-    
-    result_TS = Make_Stochastic_here_and_now_decision(p_wt, S, num_reduced)
-    
-    if result !== nothing
-        system_cost, prices_day_1, orders_day_1, storage_day_1, send_receive_day_1,
-        prices_day_2, orders_day_2, storage_day_2, send_receive_day_2 = result_TS
-        
-        # Store results 
-        system_costs_dict[num_reduced] = system_cost
-        prices_day_1_dict[num_reduced] = prices_day_1
-        orders_day_1_dict[num_reduced] = orders_day_1
-        storage_day_1_dict[num_reduced] = storage_day_1
-        send_receive_day_1_dict[num_reduced] = send_receive_day_1
-        prices_day_2_dict[num_reduced] = prices_day_2
-        orders_day_2_dict[num_reduced] = orders_day_2
-        storage_day_2_dict[num_reduced] = storage_day_2
-        send_receive_day_2_dict[num_reduced] = send_receive_day_2
-        
-    else
-        println("No solution found for num_reduced = $num_reduced")
+# intial price, 100 experiments
+price = zeros(number_of_experiments, number_of_warehouses, number_of_simulation_periods)
+for i in 1:number_of_experiments
+    for j in 1:number_of_warehouses
+        for t in 1:number_of_simulation_periods
+            price[i,j,t] = rand(Uniform(0,10))
+        end
     end
 end
 
+# 1000 scenarios, 10 reduced scenarios
+S = 1000
+num_reduced_values = [5, 20, 50]
 
+# Include 1b, 1c and 1d:
+include("1c_optimality_in_hindsight.jl")
+include("1b Expected Value.jl")
+include("1d_two_stage.jl")
+# Do for loop,
+oih_system_costs = zeros(number_of_experiments)
+ev_system_costs = zeros(number_of_experiments)
+ts_system_costs = zeros(number_of_experiments, length(num_reduced_values))
+for i in 1:number_of_experiments
+    print("Running experiment $i")
+    print("\n")
+    print("Running Optimality in Hindsight")
+    result_oih = Calculate_OiH_solution(price[i,:,:])
+    oih_system_costs[i] = result_oih[1]
+    print("Running Expected Value")
+    result_ev = make_EV_here_and_now_decision(price[i,:,1])
+    ev_system_costs[i] = result_ev[1]
+    print("Running Two-Stage")
+    j = 1
+    for num_reduced in num_reduced_values
+        result_ts = Make_Stochastic_here_and_now_decision(price[i,:,1], S, num_reduced)
+        ts_system_costs[i, j] = result_ts[1]
+        j += 1
+    end 
+end
+
+# results
+function plot_results(oih_system_costs, ev_system_costs, ts_system_costs)
+    # Optimality in Hindsight
+    histogram(oih_system_costs, bins=20, label="OiH", xlabel="System Cost", ylabel="Frequency", title="Optimality in Hindsight")
+    # Average line
+    avg_oih = round(mean(oih_system_costs), digits=2)
+    vline!([avg_oih], label="Mean", color="red")
+    annotate!([(avg_oih, 13, text("Mean = $avg_oih", 10, :left))])
+    savefig("Assignment_1/Plots/1e_OiH.png")
+
+    # Expected Value
+    histogram(ev_system_costs, bins=20, label="EV", xlabel="System Cost", ylabel="Frequency", title="Expected Value")
+    # Average line
+    avg_ev = round(mean(ev_system_costs), digits=2)
+    vline!([avg_ev], label="Mean", color="red")
+    annotate!([(avg_ev, 10, text("Mean = $avg_ev", 10, :left))])
+    savefig("Assignment_1/Plots/1e_EV.png")
+
+    # Two-Stage
+    histogram(ts_system_costs[:,1], bins=20, label="S=5", xlabel="System Cost", ylabel="Frequency", title="Two-Stage 5 Scenarios")
+    # Average line
+    avg_ts_1 = round(mean(ts_system_costs[:,1]), digits=2)
+    vline!([avg_ts_1], label="Mean", color="red")
+    annotate!([(avg_ts_1, 9, text("Mean = $avg_ts_1", 10, :right))])
+    savefig("Assignment_1/Plots/1e_TS_5.png")
+
+    histogram(ts_system_costs[:,2], bins=20, label="S=20", xlabel="System Cost", ylabel="Frequency", title="Two-Stage 20 Scenarios")
+    # Average line
+    avg_ts_2 = round(mean(ts_system_costs[:,2]), digits=2)
+    vline!([avg_ts_2], label="Mean", color="red")
+    annotate!([(avg_ts_2, 9, text("Mean = $avg_ts_2", 10, :right))])
+    savefig("Assignment_1/Plots/1e_TS_20.png")
+
+    histogram(ts_system_costs[:,3], bins=20, label="S=50", xlabel="System Cost", ylabel="Frequency", title="Two-Stage 50 Scenarios")
+    # Average line
+    avg_ts_3 = round(mean(ts_system_costs[:,3]), digits=2)
+    vline!([avg_ts_3], label="Mean", color="red")
+    annotate!([(avg_ts_3, 8, text("Mean = $avg_ts_3", 10, :left))])
+    savefig("Assignment_1/Plots/1e_TS_50.png")
+end 
+plot_results(oih_system_costs, ev_system_costs, ts_system_costs)

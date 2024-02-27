@@ -6,27 +6,25 @@ using Printf
 using Plots
 using Random
 
-# random seed for reproducability
-Random.seed!(1234)
+# # random seed for reproducability
+# Random.seed!(1234)
 
-# Load data from 02435_two_stage_problem_data.jl function load_the_data()
-include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
-number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
+# # Load data from 02435_two_stage_problem_data.jl function load_the_data()
+# include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
+# number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
 
-# Constant demand for all warehouses and all periods
-demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
+# # Constant demand for all warehouses and all periods
+# demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
 
-include("V2_Assignment_A_codes/V2_simulation_experiments.jl")
-number_of_experiments, Expers, price_trajectory = simulation_experiments_creation(number_of_warehouses, W, number_of_simulation_periods)
-# Create the initial price for t=1
-p_wt = price_trajectory[1,:,1]
+# include("V2_Assignment_A_codes/V2_simulation_experiments.jl")
+# number_of_experiments, Expers, price_trajectory = simulation_experiments_creation(number_of_warehouses, W, number_of_simulation_periods)
+# # Create the initial price for t=1
+# p_wt = price_trajectory[1,:,1]
 
-include("V2_Assignment_A_codes/V2_price_process.jl")
-# 1000 scenarios, 10 reduced scenarios
-S = 1000
-num_reduced = 10
-
-model_1d = Model(Gurobi.Optimizer)
+# include("V2_Assignment_A_codes/V2_price_process.jl")
+# # 1000 scenarios, 10 reduced scenarios
+# S = 1000
+# num_reduced = 10
 
 # function to create, reduce and plot scenarios for stochastic price. 
 # Use fast forward selection to reduce the scenarios
@@ -206,33 +204,32 @@ function Make_Stochastic_here_and_now_decision(p_wt, S, num_reduced)
             end
         end
         # Extract values for Day 1
-        prices_day_1 = value.(p_wt)
-        orders_day_1 = value.(x_wt)
-        storage_day_1 = value.(z_wt)
-        send_receive_day_1 = value.(y_send_wqt)
+        # prices_day_1 = value.(p_wt)
+        # orders_day_1 = value.(x_wt)
+        # storage_day_1 = value.(z_wt)
+        # send_receive_day_1 = value.(y_send_wqt)
 
-        # Extract values for Day 2
-        prices_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
-        orders_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
-        storage_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
-        send_receive_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses, number_of_warehouses)
+        # # Extract values for Day 2
+        # prices_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
+        # orders_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
+        # storage_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
+        # send_receive_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses, number_of_warehouses)
 
-        for s in 1:num_reduced
-            for w in 1:number_of_warehouses
-                prices_day_2[s, w] = value(price_scenarios[s, w])
-                orders_day_2[s, w] = value(x_wt_scen[w, s])
-                storage_day_2[s, w] = value(z_wt_scen[w, s])
-                for q in 1:number_of_warehouses
-                    send_receive_day_2[s, w, q] = value(y_send_wqt_scen[w, q, s])
-                end
-            end
-        end
+        # for s in 1:num_reduced
+        #     for w in 1:number_of_warehouses
+        #         prices_day_2[s, w] = value(price_scenarios[s, w])
+        #         orders_day_2[s, w] = value(x_wt_scen[w, s])
+        #         storage_day_2[s, w] = value(z_wt_scen[w, s])
+        #         for q in 1:number_of_warehouses
+        #             send_receive_day_2[s, w, q] = value(y_send_wqt_scen[w, q, s])
+        #         end
+        #     end
+        # end
         
         system_cost = objective_value(model_1d)
         println("Total system cost: ", system_cost)
 
-        return system_cost, prices_day_1, orders_day_1, storage_day_1, send_receive_day_1,
-               prices_day_2, orders_day_2, storage_day_2, send_receive_day_2
+        return system_cost
     else
         println("No solution found")
         return nothing
@@ -240,4 +237,4 @@ function Make_Stochastic_here_and_now_decision(p_wt, S, num_reduced)
     end 
 end
 
-Make_Stochastic_here_and_now_decision(p_wt, S, 10)
+#Make_Stochastic_here_and_now_decision(p_wt, S, 10)

@@ -4,41 +4,63 @@ using Gurobi
 using Printf
 using Distributions
 
-# Load data from 02435_two_stage_problem_data.jl function load_the_data()
-include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
-number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
+# # Load data from 02435_two_stage_problem_data.jl function load_the_data()
+# include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
+# number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
 
-# Generate random data for day 1
-price = rand(Uniform(0,10),10,10)
-demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
+# # Generate random data for day 1
+# #price = rand(Uniform(0,10),10,10)
+# demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
 
-# Include the file containing the price process function
-include("V2_Assignment_A_codes/V2_price_process.jl")
+# # Include the file containing the price process function
+# include("V2_Assignment_A_codes/V2_price_process.jl")
 
+# # price as a random 3 element vector
+# price = rand(Uniform(0,10),3)
+
+# make a function that takes the inital price and calculates the expected price for 1000 samples using sample_next
 function calculate_expected_prices(price)
-         
-    # return expected_price
     num_samples = 1000
-    expected_price = zeros(size(price))  # Initialize expected prices matrix
-
-    for w in 1:size(price, 1) 
-        for t in 1:size(price, 2)
-            initial_prices = price[w, t]  # Extract initial prices as a scalar or vector
-            expected_price_tmp = 0.0  # Initialize as a scalar
-            
-            for i in 1:num_samples
-                price_sample = sample_next(initial_prices)  # Use initial prices as input to sample_next
-                expected_price_tmp += price_sample
-            end
-            
-            expected_price_tmp /= num_samples  # Average over samples
-            expected_price[w, t] = expected_price_tmp  # Assign expected prices back to the main matrix
+    expected_price = zeros(number_of_warehouses)  # Initialize expected prices matrix
+    for w in 1:number_of_warehouses
+        initial_prices = price[w]  # Extract initial prices as a scalar or vector
+        expected_price_tmp = 0.0  # Initialize as a scalar
+        for i in 1:num_samples
+            price_sample = sample_next(initial_prices)  # Use initial prices as input to sample_next
+            expected_price_tmp += price_sample
         end
+        expected_price_tmp /= num_samples  # Average over samples
+        expected_price[w] = expected_price_tmp  # Assign expected prices back to the main matrix
     end
-    
     return expected_price
-    
 end
+#expected_price = ev_price_test(price)
+
+
+# function calculate_expected_prices(price)
+         
+#     # return expected_price
+#     num_samples = 1000
+#     expected_price = zeros(size(price))  # Initialize expected prices matrix
+
+#     for w in 1:size(price, 1) 
+#         for t in 1:size(price, 2)
+#             initial_prices = price[w, t]  # Extract initial prices as a scalar or vector
+#             expected_price_tmp = 0.0  # Initialize as a scalar
+            
+#             for i in 1:num_samples
+#                 price_sample = sample_next(initial_prices)  # Use initial prices as input to sample_next
+#                 expected_price_tmp += price_sample
+#             end
+            
+#             expected_price_tmp /= num_samples  # Average over samples
+#             expected_price[w, t] = expected_price_tmp  # Assign expected prices back to the main matrix
+#         end
+#     end
+    
+#     return expected_price
+    
+# end
 
     
 
@@ -56,10 +78,10 @@ function make_EV_here_and_now_decision(price)
    @variable(model_ev, 0 <= m_wt[w in W, t in sim_T]) # Missing demand at warehouse w in period t
 
 
-    @objective(model_ev, Min, sum(price[w,t] * x_wt[w,t] for w in W, t in sim_T[1]) 
+    @objective(model_ev, Min, sum(price[w] * x_wt[w,t] for w in W, t in sim_T[1]) 
                                 + sum(cost_miss[w] * m_wt[w,t] for w in W, t in sim_T[1]) 
                               + sum(cost_tr[w,q] * y_send_wqt[w,q,t] for w in W, q in W, t in sim_T[1]) 
-                              +sum(expected_price[w,t] * x_wt[w,t] for w in W, t in sim_T[2]) 
+                              +sum(expected_price[w] * x_wt[w,t] for w in W, t in sim_T[2]) 
                               + sum(cost_miss[w] * m_wt[w,t] for w in W, t in sim_T[2]) 
                             + sum(cost_tr[w,q] * y_send_wqt[w,q,t] for w in W, q in W, t in sim_T[2]))
 
@@ -108,7 +130,7 @@ function make_EV_here_and_now_decision(price)
         println("Day 1:")
         for w in W
             println("Warehouse ", w)
-            @printf("Price: %0.3f\n", value(price[w,1]))
+            @printf("Price: %0.3f\n", value(price[w]))
             @printf("Order: %0.3f\n", value(x_wt[w,1]))
             @printf("Storage: %0.3f\n", value(z_wt[w,1]))
             for q in W
@@ -125,7 +147,7 @@ function make_EV_here_and_now_decision(price)
         println("Day 2:")
         for w in W
             println("Warehouse ", w)
-            @printf("Expected Price: %0.3f\n", value(expected_price[w,2]))
+            @printf("Expected Price: %0.3f\n", value(expected_price[w]))
             @printf("Order: %0.3f\n", value(x_wt[w,2]))
             @printf("Storage: %0.3f\n", value(z_wt[w,2]))
             for q in W
@@ -136,23 +158,22 @@ function make_EV_here_and_now_decision(price)
             end
         end
         # Extract values for Day 1
-        prices_day_1 = value.(price[:, 1])
-        orders_day_1 = value.(x_wt[:, 1])
-        storage_day_1 = value.(z_wt[:, 1])
-        send_receive_day_1 = value.(y_send_wqt[:, :, 1])
+        # prices_day_1 = value.(price[:, 1])
+        # orders_day_1 = value.(x_wt[:, 1])
+        # storage_day_1 = value.(z_wt[:, 1])
+        # send_receive_day_1 = value.(y_send_wqt[:, :, 1])
 
-        # Extract values for Day 2
-        expected_prices_day_2 = value.(expected_price[:, 2])
-        orders_day_2 = value.(x_wt[:, 2])
-        storage_day_2 = value.(z_wt[:, 2])
-        send_receive_day_2 = value.(y_send_wqt[:, :, 2])
+        # # Extract values for Day 2
+        # expected_prices_day_2 = value.(expected_price[:, 2])
+        # orders_day_2 = value.(x_wt[:, 2])
+        # storage_day_2 = value.(z_wt[:, 2])
+        # send_receive_day_2 = value.(y_send_wqt[:, :, 2])
 
         system_cost = objective_value(model_ev)
         println("Total system cost: ", system_cost)
 
         # Return the relevant results
-        return system_cost, prices_day_1, orders_day_1, storage_day_1, send_receive_day_1,
-               expected_prices_day_2, orders_day_2, storage_day_2, send_receive_day_2
+        return system_cost
         else
         println("No solution found")
         return nothing
@@ -161,4 +182,4 @@ function make_EV_here_and_now_decision(price)
 
 end
 
-make_EV_here_and_now_decision(price)
+#make_EV_here_and_now_decision(price)
