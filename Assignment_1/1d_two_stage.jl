@@ -205,11 +205,38 @@ function Make_Stochastic_here_and_now_decision(p_wt, S, num_reduced)
             end 
             end
         end
+        # Extract values for Day 1
+        prices_day_1 = value.(p_wt)
+        orders_day_1 = value.(x_wt)
+        storage_day_1 = value.(z_wt)
+        send_receive_day_1 = value.(y_send_wqt)
+
+        # Extract values for Day 2
+        prices_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
+        orders_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
+        storage_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
+        send_receive_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses, number_of_warehouses)
+
+        for s in 1:num_reduced
+            for w in 1:number_of_warehouses
+                prices_day_2[s, w] = value(price_scenarios[s, w])
+                orders_day_2[s, w] = value(x_wt_scen[w, s])
+                storage_day_2[s, w] = value(z_wt_scen[w, s])
+                for q in 1:number_of_warehouses
+                    send_receive_day_2[s, w, q] = value(y_send_wqt_scen[w, q, s])
+                end
+            end
+        end
         
         system_cost = objective_value(model_1d)
         println("Total system cost: ", system_cost)
+
+        return system_cost, prices_day_1, orders_day_1, storage_day_1, send_receive_day_1,
+               prices_day_2, orders_day_2, storage_day_2, send_receive_day_2
     else
         println("No solution found")
+        return nothing
+        
     end 
 end
 

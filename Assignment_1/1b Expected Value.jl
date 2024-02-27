@@ -135,12 +135,30 @@ function make_EV_here_and_now_decision(price)
                 end
             end
         end
-        
+        # Extract values for Day 1
+        prices_day_1 = value.(price[:, 1])
+        orders_day_1 = value.(x_wt[:, 1])
+        storage_day_1 = value.(z_wt[:, 1])
+        send_receive_day_1 = value.(y_send_wqt[:, :, 1])
+
+        # Extract values for Day 2
+        expected_prices_day_2 = value.(expected_price[:, 2])
+        orders_day_2 = value.(x_wt[:, 2])
+        storage_day_2 = value.(z_wt[:, 2])
+        send_receive_day_2 = value.(y_send_wqt[:, :, 2])
+
         system_cost = objective_value(model_ev)
         println("Total system cost: ", system_cost)
-    else
+
+        # Return the relevant results
+        return system_cost, prices_day_1, orders_day_1, storage_day_1, send_receive_day_1,
+               expected_prices_day_2, orders_day_2, storage_day_2, send_receive_day_2
+        else
         println("No solution found")
+        return nothing
+        
     end 
+
 end
 
 make_EV_here_and_now_decision(price)

@@ -92,7 +92,7 @@ function Calculate_OiH_solution(price)
     else
         println("No solution found")
     end 
-    return 
+    return system_cost, value.(x_wt), value.(z_wt), value.(y_send_wqt), value.(y_receive_wqt)
 end
 
 # Run model for the given price
