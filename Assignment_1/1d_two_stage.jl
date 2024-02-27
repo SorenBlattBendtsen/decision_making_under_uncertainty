@@ -1,28 +1,37 @@
+# 1d, 2 stage problem with stochastic price
 # import packages
 using JuMP
 using Gurobi
 using Printf
 using Plots
+using Random
+
+# random seed for reproducability
+Random.seed!(1234)
 
 # Load data from 02435_two_stage_problem_data.jl function load_the_data()
 include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
 number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
 
-# take only one experiment of demand and price
+# Constant demand for all warehouses and all periods
 demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
 
 include("V2_Assignment_A_codes/V2_simulation_experiments.jl")
 number_of_experiments, Expers, price_trajectory = simulation_experiments_creation(number_of_warehouses, W, number_of_simulation_periods)
-# price t=1
+# Create the initial price for t=1
 p_wt = price_trajectory[1,:,1]
 
 include("V2_Assignment_A_codes/V2_price_process.jl")
+# 1000 scenarios, 10 reduced scenarios
 S = 1000
+num_reduced = 10
 
 model_1d = Model(Gurobi.Optimizer)
 
+# function to create, reduce and plot scenarios for stochastic price. 
+# Use fast forward selection to reduce the scenarios
 function Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, plots=true)
-    # create S price scenarios using the sample_next function
+    # create S price scenarios using the sample_next function based on initial price p_wt
     p_wt_scenarios = zeros(S, number_of_warehouses)
     for s in 1:S
         for w in W
@@ -38,7 +47,6 @@ function Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, plots=t
         end
     end
 
-
     #Initialize equiprobable probabilities
     probabilities = repeat([1.0/S], 1, S)[1,:]
     # Use fast forward selection and apply it to get the reduced scenarios and updated probabilities
@@ -50,14 +58,13 @@ function Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, plots=t
     #Selected scenario indices
     reduced_scenario_indices = result[2]
     print("Reduced scenario indices: ", reduced_scenario_indices)
-    #reduced_price_scenarios = p_wt_scenarios[reduced_scenario_indices,:]
     # Filter p_wt_scenarios based on reduced_scenario_indices
     reduced_price_scenarios = zeros(Float64, num_reduced, number_of_warehouses)
-
     for i = 1:num_reduced
         reduced_price_scenarios[i,:] = p_wt_scenarios[reduced_scenario_indices[i],:]
     end
-
+    
+    # Plot the reduced scenarios and histogram of price scenarios
     if plots
         histogram(p_wt_scenarios[:,:], xlabel="Price", ylabel="Frequency", title="Historgram of price scenarios", alpha=0.8)
         savefig("Assignment_1/Plots/histogram_price_scenarios.pdf")
@@ -76,24 +83,28 @@ function Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, plots=t
     return reduced_price_scenarios, reduced_probabilities
 end    
 
+# function to run 2 stage problem with stochastic price
+# All decisions are first stage in t=1 and second stage in t>2
 function Make_Stochastic_here_and_now_decision(p_wt, S, num_reduced)
 
-    price_scenarios, probabilities = Scenario_generation(p_wt, S, number_of_warehouses, 10, true)
-    N = collect(1:num_reduced)
+    # Generate the reduced price scenarios and their probabilities
+    price_scenarios, probabilities = Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, true)
+    N = collect(1:num_reduced) # reduced number of scenarios
     # Define the model
     model_1d = Model(Gurobi.Optimizer)
 
-
-    @variable(model_1d, 0 <= x_wt[w in W]) # Coffee ordered at warehouse w in period t
-    @variable(model_1d, 0 <= z_wt[w in W]) # Coffee stored at warehouse w in period t
-    @variable(model_1d, 0 <= y_send_wqt[w in W, q in W]) # Coffee sent from warehouse w to warehouse q in period t
-    @variable(model_1d, 0 <= y_receive_wqt[w in W, q in W]) # Coffee received at warehouse w from warehouse q in period t
-    @variable(model_1d, 0 <= m_wt[w in W]) # Missing demand at warehouse w in period t
-    @variable(model_1d, 0 <= x_wt_scen[w in W, s in N]) # Coffee ordered at warehouse w in period t in scenario s
-    @variable(model_1d, 0 <= z_wt_scen[w in W, s in N]) # Coffee stored at warehouse w in period t in scenario s
-    @variable(model_1d, 0 <= y_send_wqt_scen[w in W, q in W, s in N]) # Coffee sent from warehouse w to warehouse q in period t
-    @variable(model_1d, 0 <= y_receive_wqt_scen[w in W, q in W, s in N]) # Coffee received at warehouse w from warehouse q in period t
-    @variable(model_1d, 0 <= m_wt_scen[w in W, s in N]) # Missing demand at warehouse w in period t
+    # Define the variables, as only 2 time periods, we can remove the time index
+    # If more then 2 time periods, add "t in sim_T-1" to second stage variables
+    @variable(model_1d, 0 <= x_wt[w in W]) # Coffee ordered at warehouse w
+    @variable(model_1d, 0 <= z_wt[w in W]) # Coffee stored at warehouse w
+    @variable(model_1d, 0 <= y_send_wqt[w in W, q in W]) # Coffee sent from warehouse w to warehouse q
+    @variable(model_1d, 0 <= y_receive_wqt[w in W, q in W]) # Coffee received at warehouse w from warehouse q
+    @variable(model_1d, 0 <= m_wt[w in W]) # Missing demand at warehouse w
+    @variable(model_1d, 0 <= x_wt_scen[w in W, s in N]) # Coffee ordered in scenario s
+    @variable(model_1d, 0 <= z_wt_scen[w in W, s in N]) # Coffee stored in scenario s
+    @variable(model_1d, 0 <= y_send_wqt_scen[w in W, q in W, s in N]) # Coffee sent in scenario s
+    @variable(model_1d, 0 <= y_receive_wqt_scen[w in W, q in W, s in N]) # Coffee received in scenario s
+    @variable(model_1d, 0 <= m_wt_scen[w in W, s in N]) # Missing demand in scenario s
     
     
     # Define the objective function
@@ -106,51 +117,53 @@ function Make_Stochastic_here_and_now_decision(p_wt, S, num_reduced)
                             )
 
     # Define the constraints
-    # Demand hour 1
-    @constraint(model_1d, demand_t0[w in W],
-    x_wt[w] - z_wt[w] + initial_stock[w]
-    + sum(y_receive_wqt[w,q] for q in W)
-    - sum(y_send_wqt[w,q] for q in W)
-    + m_wt[w] == demand[w,1])
-
-    # Demand hour t
-    @constraint(model_1d, demand_t[w in W, s in N],
-    x_wt_scen[w,s] - z_wt_scen[w,s] + z_wt[w]
-    + sum(y_receive_wqt_scen[w,q,s] for q in W) 
-    - sum(y_send_wqt_scen[w,q,s] for q in W)
-    + m_wt_scen[w,s] == demand[w,2])
+    # First stage constraints
+    # Demand balance
+    @constraint(model_1d, demand_1[w in W],
+                x_wt[w] - z_wt[w] + initial_stock[w]
+                + sum(y_receive_wqt[w,q] for q in W)
+                - sum(y_send_wqt[w,q] for q in W)
+                + m_wt[w] == demand[w,1])
 
     # Storage capacity
-    @constraint(model_1d, storage_capacity[w in W],
-    z_wt[w] <= warehouse_capacities[w])
+    @constraint(model_1d, storage_capacity_1[w in W],
+                z_wt[w] <= warehouse_capacities[w])
 
     # Transportation capacity
-    @constraint(model_1d, transportation_capacity[w in W, q in W],
-    y_send_wqt[w,q] <= transport_capacities[w,q])
+    @constraint(model_1d, transportation_capacity_1[w in W, q in W],
+                y_send_wqt[w,q] <= transport_capacities[w,q])
 
     # Constraint saying the amount sent from w to q is the same as received at q from w
-    @constraint(model_1d, send_receive[w in W, q in W], 
-        y_send_wqt[w,q] == y_receive_wqt[q,w])
-
+    @constraint(model_1d, send_receive_1[w in W, q in W], 
+                y_send_wqt[w,q] == y_receive_wqt[q,w])
 
     #Storage one day before transfer, initial stock in t=1
-    @constraint(model_1d, storage_t1[w in W, q in W],
-    y_send_wqt[w,q] <= initial_stock[w])
+    @constraint(model_1d, storage_1[w in W, q in W],
+                y_send_wqt[w,q] <= initial_stock[w])
+
+    # Second stage constraints
+    # Demand balance
+    @constraint(model_1d, demand_2[w in W, s in N],
+                x_wt_scen[w,s] - z_wt_scen[w,s] + z_wt[w]
+                + sum(y_receive_wqt_scen[w,q,s] for q in W) 
+                - sum(y_send_wqt_scen[w,q,s] for q in W)
+                + m_wt_scen[w,s] == demand[w,2])
 
     # Storage capacity
-    @constraint(model_1d, storage_capacity_s[w in W, s in N],
-    z_wt_scen[w,s] <= warehouse_capacities[w])
+    @constraint(model_1d, storage_capacity_2[w in W, s in N],
+                z_wt_scen[w,s] <= warehouse_capacities[w])
 
     # Transportation capacity
-    @constraint(model_1d, transportation_capacity_s[w in W, q in W, s in N],
-    y_send_wqt_scen[w,q,s] <= transport_capacities[w,q])
+    @constraint(model_1d, transportation_capacity_2[w in W, q in W, s in N],
+                y_send_wqt_scen[w,q,s] <= transport_capacities[w,q])
 
     # Constraint saying the amount sent from w to q is the same as received at q from w
-    @constraint(model_1d, send_receive_s[w in W, q in W, s in N],
-    y_send_wqt_scen[w,q,s] == y_receive_wqt_scen[q,w,s])
+    @constraint(model_1d, send_receive_2[w in W, q in W, s in N],
+                y_send_wqt_scen[w,q,s] == y_receive_wqt_scen[q,w,s])
 
-    @constraint(model_1d, storage_before_transfer_s[w in W, q in W, s in N],
-    y_send_wqt_scen[w,q,s] <= z_wt[w])
+    #Storage one day before transfer
+    @constraint(model_1d, storage_before_transfer_2[w in W, q in W, s in N],
+                y_send_wqt_scen[w,q,s] <= z_wt[w])
                 
     # Solve the model
     optimize!(model_1d)

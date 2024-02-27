@@ -1,3 +1,4 @@
+# 1c, optimality in hindsight (deterministic demand and price)
 # import packages
 using JuMP
 using Gurobi
@@ -10,15 +11,14 @@ number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_cap
 # Load demand data from WH_simulation_experiments.jl function simulation_experiments_creation()
 include("V2_Assignment_A_codes/V2_simulation_experiments.jl")
 number_of_experiments, Expers, price_trajectory = simulation_experiments_creation(number_of_warehouses, W, number_of_simulation_periods)
-# take only one experiment of demand and price
+# Constant demand and 1 experiment of price for all warehouses and all periods
 demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
 p_wt = price_trajectory[1,:,:]
 
 # Function to calculate the optimal solution in hindsight 
-
 function Calculate_OiH_solution(price)
     
-# Define the model
+    # Define the model
     model_1c = Model(Gurobi.Optimizer)
 
     # Variables
@@ -34,7 +34,6 @@ function Calculate_OiH_solution(price)
                             + sum(cost_tr[w,q] * y_send_wqt[w,q,t] for w in W, q in W, t in sim_T))
 
     # Define the constraints
-
     # demand hour 1
     @constraint(model_1c, demand_fulfillment_t0[w in W],
                 x_wt[w,1] - z_wt[w,1] + initial_stock[w]
@@ -42,7 +41,7 @@ function Calculate_OiH_solution(price)
                 - sum(y_send_wqt[w,q,1] for q in W)
                 + m_wt[w,1] == demand[w,1])
 
-    #demand hour t
+    #demand hour t > 1
     @constraint(model_1c, demand_fulfillment[w in W, t in sim_T[2:end]],
                 x_wt[w,t] - z_wt[w,t] + z_wt[w,t-1]
                 + sum(y_receive_wqt[w,q,t] for q in W) 
@@ -63,10 +62,9 @@ function Calculate_OiH_solution(price)
 
 
     #Storage one day before transfer, initial stock in t=1
-    @constraint(model_1c, storage_t1[w in W, q in W],
+    @constraint(model_1c, storage_1[w in W, q in W],
                 y_send_wqt[w,q,1] <= initial_stock[w])
-
-    @constraint(model_1c, storage_before_transfer[w in W, q in W, t in sim_T[2:end]],
+    @constraint(model_1c, storage_2[w in W, q in W, t in sim_T[2:end]],
                 y_send_wqt[w,q,t] <= z_wt[w,t-1])
                 
     # Solve the model
