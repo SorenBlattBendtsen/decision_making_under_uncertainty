@@ -1,4 +1,10 @@
 #1e-Experiments of all Methods
+# Important comment:
+# When you run this, you might get an error regarding the Fast Forward Selection file.
+# If that is the case, you should open the file fast-forward-selection.jl and run each function one by one.
+# And then run this file again.
+
+
 # import packages
 using JuMP
 using Gurobi

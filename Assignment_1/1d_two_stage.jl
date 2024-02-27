@@ -52,10 +52,8 @@ function Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, plots=t
     result = FastForwardSelection(D, probabilities, num_reduced)
     #Resulting probabilities
     reduced_probabilities = result[1]
-    print("Reduced probabilities: ", reduced_probabilities)
     #Selected scenario indices
     reduced_scenario_indices = result[2]
-    print("Reduced scenario indices: ", reduced_scenario_indices)
     # Filter p_wt_scenarios based on reduced_scenario_indices
     reduced_price_scenarios = zeros(Float64, num_reduced, number_of_warehouses)
     for i = 1:num_reduced
@@ -64,7 +62,7 @@ function Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, plots=t
     
     # Plot the reduced scenarios and histogram of price scenarios
     if plots
-        histogram(p_wt_scenarios[:,:], xlabel="Price", ylabel="Frequency", title="Historgram of price scenarios", alpha=0.8)
+        histogram(p_wt_scenarios[:,:], xlabel="Price", ylabel="Frequency", title="Histogram of price scenarios", alpha=0.8)
         savefig("Assignment_1/Plots/histogram_price_scenarios.pdf")
         #transpose p_wt_scenarios for plotting
         p_wt_scenarios_t = transpose(p_wt_scenarios)
