@@ -127,36 +127,36 @@ function make_EV_here_and_now_decision(price)
     if termination_status(model_ev) == MOI.OPTIMAL
         println("Optimal solution found")
         # Print results for Day 1
-        println("Day 1:")
-        for w in W
-            println("Warehouse ", w)
-            @printf("Price: %0.3f\n", value(price[w]))
-            @printf("Order: %0.3f\n", value(x_wt[w,1]))
-            @printf("Storage: %0.3f\n", value(z_wt[w,1]))
-            for q in W
-                if q != w
-                    @printf("Send to warehouse %i: %0.3f\n", q, value(y_send_wqt[w,q,1]))
-                    @printf("Receive from warehouse %i: %0.3f\n", q, value(y_receive_wqt[w,q,1]))
-                end
-            end
-        end
+        # println("Day 1:")
+        # for w in W
+        #     println("Warehouse ", w)
+        #     @printf("Price: %0.3f\n", value(price[w]))
+        #     @printf("Order: %0.3f\n", value(x_wt[w,1]))
+        #     @printf("Storage: %0.3f\n", value(z_wt[w,1]))
+        #     for q in W
+        #         if q != w
+        #             @printf("Send to warehouse %i: %0.3f\n", q, value(y_send_wqt[w,q,1]))
+        #             @printf("Receive from warehouse %i: %0.3f\n", q, value(y_receive_wqt[w,q,1]))
+        #         end
+        #     end
+        # end
              
-        println("-------")
+        # println("-------")
 
-        # Print results for Day 2
-        println("Day 2:")
-        for w in W
-            println("Warehouse ", w)
-            @printf("Expected Price: %0.3f\n", value(expected_price[w]))
-            @printf("Order: %0.3f\n", value(x_wt[w,2]))
-            @printf("Storage: %0.3f\n", value(z_wt[w,2]))
-            for q in W
-                if q != w
-                    @printf("Send to warehouse %i: %0.3f\n", q, value(y_send_wqt[w,q,2]))
-                    @printf("Receive from warehouse %i: %0.3f\n", q, value(y_receive_wqt[w,q,2]))
-                end
-            end
-        end
+        # # Print results for Day 2
+        # println("Day 2:")
+        # for w in W
+        #     println("Warehouse ", w)
+        #     @printf("Expected Price: %0.3f\n", value(expected_price[w]))
+        #     @printf("Order: %0.3f\n", value(x_wt[w,2]))
+        #     @printf("Storage: %0.3f\n", value(z_wt[w,2]))
+        #     for q in W
+        #         if q != w
+        #             @printf("Send to warehouse %i: %0.3f\n", q, value(y_send_wqt[w,q,2]))
+        #             @printf("Receive from warehouse %i: %0.3f\n", q, value(y_receive_wqt[w,q,2]))
+        #         end
+        #     end
+        # end
         # Extract values for Day 1
         # prices_day_1 = value.(price[:, 1])
         # orders_day_1 = value.(x_wt[:, 1])
