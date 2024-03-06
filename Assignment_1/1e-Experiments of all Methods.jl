@@ -27,12 +27,18 @@ include("V2_Assignment_A_codes/V2_price_process.jl")
 # Constant demand for all warehouses and all periods
 demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
 
-# intial price, 100 experiments
+# intial price, 100 experiments. Use sample next to get second stage price for OiH solution
 price = zeros(number_of_experiments, number_of_warehouses, number_of_simulation_periods)
+price_oih = zeros(number_of_experiments, number_of_warehouses, number_of_simulation_periods)
 for i in 1:number_of_experiments
     for j in 1:number_of_warehouses
         for t in 1:number_of_simulation_periods
             price[i,j,t] = rand(Uniform(0,10))
+            if t == 1
+                price_oih[i,j,t] = price[i,j,t]
+            else
+                price_oih[i,j,t] = sample_next(price[i,j,t])
+            end 
         end
     end
 end
@@ -45,7 +51,7 @@ num_reduced_values = [5, 20, 50]
 include("1c_optimality_in_hindsight.jl")
 include("1b Expected Value.jl")
 include("1d_two_stage.jl")
-# Do for loop,
+# Loop through all experiments and calculate system costs for each method
 oih_system_costs = zeros(number_of_experiments)
 ev_system_costs = zeros(number_of_experiments)
 ts_system_costs = zeros(number_of_experiments, length(num_reduced_values))
@@ -53,7 +59,7 @@ for i in 1:number_of_experiments
     print("Running experiment $i")
     print("\n")
     print("Running Optimality in Hindsight")
-    result_oih = Calculate_OiH_solution(price[i,:,:])
+    result_oih = Calculate_OiH_solution(price_oih[i,:,:])
     oih_system_costs[i] = result_oih[1]
     print("Running Expected Value")
     result_ev = make_EV_here_and_now_decision(price[i,:,1])
@@ -74,7 +80,7 @@ function plot_results(oih_system_costs, ev_system_costs, ts_system_costs)
     # Average line
     avg_oih = round(mean(oih_system_costs), digits=2)
     vline!([avg_oih], label="Mean", color="red")
-    annotate!([(avg_oih, 13, text("Mean = $avg_oih", 10, :left))])
+    annotate!([(avg_oih, 11, text("Mean = $avg_oih", 10, :left))])
     savefig("Assignment_1/Plots/1e_OiH.png")
 
     # Expected Value
