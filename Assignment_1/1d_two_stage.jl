@@ -6,26 +6,6 @@ using Printf
 using Plots
 using Random
 
-# # random seed for reproducability
-# Random.seed!(1234)
-
-# # Load data from 02435_two_stage_problem_data.jl function load_the_data()
-# include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
-# number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
-
-# # Constant demand for all warehouses and all periods
-# demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
-
-# include("V2_Assignment_A_codes/V2_simulation_experiments.jl")
-# number_of_experiments, Expers, price_trajectory = simulation_experiments_creation(number_of_warehouses, W, number_of_simulation_periods)
-# # Create the initial price for t=1
-# p_wt = price_trajectory[1,:,1]
-
-# include("V2_Assignment_A_codes/V2_price_process.jl")
-# # 1000 scenarios, 10 reduced scenarios
-# S = 1000
-# num_reduced = 10
-
 # function to create, reduce and plot scenarios for stochastic price. 
 # Use fast forward selection to reduce the scenarios
 function Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, plots=true)
@@ -234,5 +214,3 @@ function Make_Stochastic_here_and_now_decision(p_wt, S, num_reduced)
         
     end 
 end
-
-#Make_Stochastic_here_and_now_decision(p_wt, S, 10)

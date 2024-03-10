@@ -4,21 +4,7 @@ using Gurobi
 using Printf
 using Distributions
 
-# # Load data from 02435_two_stage_problem_data.jl function load_the_data()
-# include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
-# number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, degradation_factor = load_the_data()
-
-# # Generate random data for day 1
-# #price = rand(Uniform(0,10),10,10)
-# demand = 4*ones(number_of_warehouses, number_of_simulation_periods)
-
-# # Include the file containing the price process function
-# include("V2_Assignment_A_codes/V2_price_process.jl")
-
-# # price as a random 3 element vector
-# price = rand(Uniform(0,10),3)
-
-# make a function that takes the inital price and calculates the expected price for 1000 samples using sample_next
+# Function that takes the inital price and calculates the expected price for 1000 samples using sample_next
 function calculate_expected_prices(price)
     num_samples = 1000
     expected_price = zeros(number_of_warehouses)  # Initialize expected prices matrix
@@ -34,36 +20,9 @@ function calculate_expected_prices(price)
     end
     return expected_price
 end
-#expected_price = ev_price_test(price)
-
-
-# function calculate_expected_prices(price)
-         
-#     # return expected_price
-#     num_samples = 1000
-#     expected_price = zeros(size(price))  # Initialize expected prices matrix
-
-#     for w in 1:size(price, 1) 
-#         for t in 1:size(price, 2)
-#             initial_prices = price[w, t]  # Extract initial prices as a scalar or vector
-#             expected_price_tmp = 0.0  # Initialize as a scalar
-            
-#             for i in 1:num_samples
-#                 price_sample = sample_next(initial_prices)  # Use initial prices as input to sample_next
-#                 expected_price_tmp += price_sample
-#             end
-            
-#             expected_price_tmp /= num_samples  # Average over samples
-#             expected_price[w, t] = expected_price_tmp  # Assign expected prices back to the main matrix
-#         end
-#     end
-    
-#     return expected_price
-    
-# end
 
     
-
+# Function for Expected Value optimization problem
 function make_EV_here_and_now_decision(price)
     expected_price = calculate_expected_prices(price)
     
@@ -181,5 +140,3 @@ function make_EV_here_and_now_decision(price)
     end 
 
 end
-
-#make_EV_here_and_now_decision(price)
