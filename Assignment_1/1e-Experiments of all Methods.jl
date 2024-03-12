@@ -43,7 +43,7 @@ for i in 1:number_of_experiments
     end
 end
 
-# 1000 scenarios, 10 reduced scenarios
+# 1000 scenarios
 S = 1000
 num_reduced_values = [5, 20, 50]
 
@@ -88,7 +88,7 @@ function plot_results(oih_system_costs, ev_system_costs, ts_system_costs)
     # Average line
     avg_ev = round(mean(ev_system_costs), digits=2)
     vline!([avg_ev], label="Mean", color="red")
-    annotate!([(avg_ev, 10, text("Mean = $avg_ev", 10, :left))])
+    annotate!([(avg_ev, 13, text("Mean = $avg_ev", 10, :left))])
     savefig("Assignment_1/Plots/1e_EV.png")
 
     # Two-Stage
@@ -96,21 +96,21 @@ function plot_results(oih_system_costs, ev_system_costs, ts_system_costs)
     # Average line
     avg_ts_1 = round(mean(ts_system_costs[:,1]), digits=2)
     vline!([avg_ts_1], label="Mean", color="red")
-    annotate!([(avg_ts_1, 9, text("Mean = $avg_ts_1", 10, :right))])
+    annotate!([(avg_ts_1, 13, text("Mean = $avg_ts_1", 10, :left))])
     savefig("Assignment_1/Plots/1e_TS_5.png")
 
     histogram(ts_system_costs[:,2], bins=20, label="S=20", xlabel="System Cost", ylabel="Frequency", title="Two-Stage 20 Scenarios")
     # Average line
     avg_ts_2 = round(mean(ts_system_costs[:,2]), digits=2)
     vline!([avg_ts_2], label="Mean", color="red")
-    annotate!([(avg_ts_2, 9, text("Mean = $avg_ts_2", 10, :right))])
+    annotate!([(avg_ts_2, 13, text("Mean = $avg_ts_2", 10, :left))])
     savefig("Assignment_1/Plots/1e_TS_20.png")
 
     histogram(ts_system_costs[:,3], bins=20, label="S=50", xlabel="System Cost", ylabel="Frequency", title="Two-Stage 50 Scenarios")
     # Average line
     avg_ts_3 = round(mean(ts_system_costs[:,3]), digits=2)
     vline!([avg_ts_3], label="Mean", color="red")
-    annotate!([(avg_ts_3, 8, text("Mean = $avg_ts_3", 10, :left))])
+    annotate!([(avg_ts_3, 13, text("Mean = $avg_ts_3", 10, :left))])
     savefig("Assignment_1/Plots/1e_TS_50.png")
 end 
 plot_results(oih_system_costs, ev_system_costs, ts_system_costs)
