@@ -22,6 +22,8 @@ function generate_and_reduce_scenarios(current_prices, num_samples, reduced_samp
     
     for t in 1:lookahead
         for s in 1:num_samples
+            # TO BE DONE: Initial prices by drawing from uni distribution
+            # RN every step randomly 
             for w in 1:length(current_prices)
                 #The function sample_next needs to be defined properly to simulate future prices based on your specific model.
                 # I used the sample next function generated in V2_price_process.jl file
@@ -36,6 +38,7 @@ function generate_and_reduce_scenarios(current_prices, num_samples, reduced_samp
             end
         end
 
+        # TODO: Need to go through all 3 warehouses, add index for warehouse
         probabilities, selected_indices = FastForwardSelection(D, fill(1.0 / num_samples, num_samples), reduced_samples)
 
         for i in 1:reduced_samples
