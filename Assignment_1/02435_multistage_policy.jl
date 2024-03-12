@@ -23,6 +23,7 @@ function generate_and_reduce_scenarios(current_prices, num_samples, reduced_samp
         for s in 1:num_samples
             for w in 1:length(current_prices)
                 #The function sample_next needs to be defined properly to simulate future prices based on your specific model.
+                # I used the sample next function generated in V2_price_process.jl file
                 all_scenarios[s,w,t] = sample_next(current_prices[w])
             end
         end
@@ -112,6 +113,7 @@ for t in 1:lookahead
     @constraint(model, storage_before_transfer[w in W, q in W, t],
                 y_send[w,q,t] <= (t == 1 ? initial_stock[w] : z[w,t-1]))
 end
+
 #Alternative contraint representation if previous one is not working
 #for t in 1:lookahead
 #@constraint(model, x[w in W] - z[w] + (t == 1 ? initial_stock[w] : z[w,t-1]) + sum(y_receive[w,q,t] for q in W) - sum(y_send[w,q,t] for q in W) + m[w,t] == demand_trajectory[w,t] for w in W)
