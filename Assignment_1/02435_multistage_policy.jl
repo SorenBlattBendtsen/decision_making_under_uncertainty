@@ -10,6 +10,8 @@ function make_multistage_here_and_now_decision(number_of_sim_periods, tau, curre
 
     # Determine lookahead based on current period tau
     lookahead = min(5-tau+1, 3)  # Adjust this based on performance requirements
+    # 5 - tau + 1: This part calculates how many days are left in the planning horizon from the current day (tau). For example, if today is day 1 (tau = 1), then there are 5 days left in the horizon. If today is day 3 (tau = 3), then there are 3 days left.
+    # min(5 - tau + 1, 3): This function then takes the minimum between the number of days left and 3. The purpose of using 3 here is to limit the maximum lookahead to 3 days, regardless of how many days are actually left. This could be due to computational constraints or the belief that looking more than 3 days ahead does not significantly improve decision quality due to increasing uncertainty.
 
     # Sample a limited number of future price scenarios and their probabilities
     # Depending on your computational constraints, adjust the number of samples and how they're reduced
@@ -22,10 +24,21 @@ function make_multistage_here_and_now_decision(number_of_sim_periods, tau, curre
 
     # Set up the optimization problem
     model = Model(Gurobi.Optimizer)
+    # This variable represents the amount of coffee (or other goods) ordered by warehouse w (where w is an index running through all warehouses in the set W) at time t (where t ranges from 1 to the value of lookahead).
+    # is a decision variable, meaning the model will determine the optimal quantity of coffee to order for each warehouse at each time step within the lookahead horizon to minimize the total cost.
     @variable(model, 0 <= x[w in W, t in 1:lookahead])
+    # This variable indicates the storage level (amount of coffee stored) at warehouse w at time t.
+    # Like x, z is a decision variable optimized by the model, respecting the constraints like storage capacities and ensuring that coffee is available to meet demand or to be sent to other warehouses.
     @variable(model, 0 <= z[w in W, t in 1:lookahead])
+    # This variable represents the amount of coffee sent from warehouse w to another warehouse q at time t.
+    # The indices w and q both range over all warehouses (but typically, a warehouse will not send coffee to itself, hence w should not equal q), and t ranges over the lookahead period.
+    # This is another decision variable that the model will optimize, taking into account transportation limits and costs.
     @variable(model, 0 <= y_send[w in W, q in W, t in 1:lookahead])
+    # In contrast to y_send, this variable denotes the amount of coffee received by warehouse w from warehouse q at time t.
+    # While the physical reality would dictate that y_receive is closely tied to y_send (i.e., what one warehouse sends, another receives), they are kept separate in the model for clarity and to enforce the symmetry through constraints.
     @variable(model, 0 <= y_receive[w in W, q in W, t in 1:lookahead])
+    # This variable represents the missing amount of coffee (unmet demand) at warehouse w at time t.
+    # Essentially, this is the shortfall: the amount by which the warehouse fails to meet the demand. The objective function typically penalizes missing amounts to ensure demands are met as closely as possible.
     @variable(model, 0 <= m[w in W, t in 1:lookahead])
 
     # Add your constraints similar to those from previous steps, adjusted for the lookahead
