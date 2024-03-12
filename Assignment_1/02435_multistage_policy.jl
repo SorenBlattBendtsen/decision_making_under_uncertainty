@@ -8,6 +8,8 @@ using Random
 include("V2_02435_multistage_problem_data.jl")
 include("fast-forward-selection.jl")
 
+# Placeholder function for generating and reducing scenarios
+# This part needs to be filled in with your logic based on your chosen approach
 # Function for generating and reducing scenarios
 function generate_and_reduce_scenarios(current_prices, num_samples, reduced_samples, lookahead)
     # Initialize matrices to store the generated and reduced scenarios
@@ -134,9 +136,3 @@ end
     return x_decision, send_decision, receive_decision, z_decision, m_decision
 end
 
-# Placeholder function for generating and reducing scenarios
-# You need to fill this in with your logic based on your chosen approach
-function generate_and_reduce_scenarios(current_prices, num_samples, reduced_samples, lookahead)
-    # Logic to generate scenarios and reduce them to a manageable number
-    return reduced_price_scenarios, reduced_probabilities
-end
