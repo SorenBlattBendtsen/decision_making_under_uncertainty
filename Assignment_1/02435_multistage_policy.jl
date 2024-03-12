@@ -66,20 +66,21 @@ function make_multistage_here_and_now_decision(number_of_sim_periods, tau, curre
     model = Model(Gurobi.Optimizer)
     # This variable represents the amount of coffee (or other goods) ordered by warehouse w (where w is an index running through all warehouses in the set W) at time t (where t ranges from 1 to the value of lookahead).
     # is a decision variable, meaning the model will determine the optimal quantity of coffee to order for each warehouse at each time step within the lookahead horizon to minimize the total cost.
-    @variable(model, 0 <= x[w in W, t in 1:lookahead])
+    # s in 1:reduced_samples is a loop over the reduced set of price scenarios, allowing the model to consider the different possible prices and their associated probabilities.
+    @variable(model, 0 <= x[w in W, t in 1:lookahead, s in 1:reduced_samples])
     # This variable indicates the storage level (amount of coffee stored) at warehouse w at time t.
     # Like x, z is a decision variable optimized by the model, respecting the constraints like storage capacities and ensuring that coffee is available to meet demand or to be sent to other warehouses.
-    @variable(model, 0 <= z[w in W, t in 1:lookahead])
+    @variable(model, 0 <= z[w in W, t in 1:lookahead, s in 1:reduced_samples])
     # This variable represents the amount of coffee sent from warehouse w to another warehouse q at time t.
     # The indices w and q both range over all warehouses (but typically, a warehouse will not send coffee to itself, hence w should not equal q), and t ranges over the lookahead period.
     # This is another decision variable that the model will optimize, taking into account transportation limits and costs.
-    @variable(model, 0 <= y_send[w in W, q in W, t in 1:lookahead])
+    @variable(model, 0 <= y_send[w in W, q in W, t in 1:lookahead, s in 1:reduced_samples])
     # In contrast to y_send, this variable denotes the amount of coffee received by warehouse w from warehouse q at time t.
     # While the physical reality would dictate that y_receive is closely tied to y_send (i.e., what one warehouse sends, another receives), they are kept separate in the model for clarity and to enforce the symmetry through constraints.
-    @variable(model, 0 <= y_receive[w in W, q in W, t in 1:lookahead])
+    @variable(model, 0 <= y_receive[w in W, q in W, t in 1:lookahead, s in 1:reduced_samples])
     # This variable represents the missing amount of coffee (unmet demand) at warehouse w at time t.
     # Essentially, this is the shortfall: the amount by which the warehouse fails to meet the demand. The objective function typically penalizes missing amounts to ensure demands are met as closely as possible.
-    @variable(model, 0 <= m[w in W, t in 1:lookahead])
+    @variable(model, 0 <= m[w in W, t in 1:lookahead, s in 1:reduced_samples])
 
     # Add your constraints similar to those from previous steps, adjusted for the lookahead
     # The constraints are now looped over each time stage t in the lookahead, which can be up to 5 days ahead. This replaces the separate demand_1, demand_2, etc., constraints in the two-stage model with a single, unified loop that applies the same logic at each stage.
@@ -88,31 +89,31 @@ function make_multistage_here_and_now_decision(number_of_sim_periods, tau, curre
     # The model maintains consistency between the amount sent from one warehouse to another and the amount received, as well as ensuring that any coffee sent on a given day was already in stock the day before.
     # This pattern keeps the core logic of your constraints consistent while allowing them to be applied across more stages. It means your model can dynamically adapt to different lookahead values without needing separate code for each potential stage.
     # Loop over all time stages for dynamic constraints
-for t in 1:lookahead
-    # First stage constraints when t = 1, subsequent stages otherwise
-    # Demand balance
-    @constraint(model, demand_balance[w in W, t],
-                x[w,t] - z[w,t] + (t == 1 ? initial_stock[w] : z[w,t-1])
-                + sum(y_receive[w,q,t] for q in W)
-                - sum(y_send[w,q,t] for q in W)
-                + m[w,t] == demand_trajectory[w,t])
 
-    # Storage capacity
-    @constraint(model, storage_capacity[w in W, t],
-                z[w,t] <= warehouse_capacities[w])
+# First stage constraints when t = 1, subsequent stages otherwise
+# Demand balance
+@constraint(model, demand_balance[w in W, t in 1:lookahead, s in 1:reduced_samples],
+            x[w,t] - z[w,t] + (t == 1 ? initial_stock[w] : z[w,t-1])
+            + sum(y_receive[w,q,t] for q in W)
+            - sum(y_send[w,q,t] for q in W)
+            + m[w,t] == demand_trajectory[w,t])
 
-    # Transportation capacity
-    @constraint(model, transportation_capacity[w in W, q in W, t],
-                y_send[w,q,t] <= transport_capacities[w,q])
+# Storage capacity
+@constraint(model, storage_capacity[w in W, t],
+            z[w,t] <= warehouse_capacities[w])
 
-    # Consistency between sending and receiving
-    @constraint(model, send_receive_consistency[w in W, q in W, t],
-                y_send[w,q,t] == y_receive[q,w,t])
+# Transportation capacity
+@constraint(model, transportation_capacity[w in W, q in W, t],
+            y_send[w,q,t] <= transport_capacities[w,q])
 
-    # Storage from previous day before transfer, accounting for t=1
-    @constraint(model, storage_before_transfer[w in W, q in W, t],
-                y_send[w,q,t] <= (t == 1 ? initial_stock[w] : z[w,t-1]))
-end
+# Consistency between sending and receiving
+@constraint(model, send_receive_consistency[w in W, q in W, t],
+            y_send[w,q,t] == y_receive[q,w,t])
+
+# Storage from previous day before transfer, accounting for t=1
+@constraint(model, storage_before_transfer[w in W, q in W, t],
+            y_send[w,q,t] <= (t == 1 ? initial_stock[w] : z[w,t-1]))
+
 
 #Alternative contraint representation if previous one is not working
 #for t in 1:lookahead
