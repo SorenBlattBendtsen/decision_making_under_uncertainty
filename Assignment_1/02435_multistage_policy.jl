@@ -7,6 +7,8 @@ using Random
 # Make sure this script is saved in the same directory as your other .jl files
 include("V2_02435_multistage_problem_data.jl")
 include("fast-forward-selection.jl")
+include("V2_price_process.jl")
+
 
 # Placeholder function for generating and reducing scenarios
 # This part needs to be filled in with your logic based on your chosen approach
