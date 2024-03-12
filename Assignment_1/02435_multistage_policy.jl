@@ -2,8 +2,43 @@
 
 using JuMP
 using Gurobi
+using Distributions
 using Random
+# Make sure this script is saved in the same directory as your other .jl files
 include("V2_02435_multistage_problem_data.jl")
+include("fast-forward-selection.jl")
+
+# Function for generating and reducing scenarios
+function generate_and_reduce_scenarios(current_prices, num_samples, reduced_samples, lookahead)
+    # Initialize matrices to store the generated and reduced scenarios
+    all_scenarios = Array{Float64,3}(undef, num_samples, length(current_prices), lookahead)
+    reduced_price_scenarios = Array{Float64,3}(undef, reduced_samples, length(current_prices), lookahead)
+    reduced_probabilities = zeros(reduced_samples, lookahead)
+    
+    for t in 1:lookahead
+        for s in 1:num_samples
+            for w in 1:length(current_prices)
+                #The function sample_next needs to be defined properly to simulate future prices based on your specific model.
+                all_scenarios[s,w,t] = sample_next(current_prices[w])
+            end
+        end
+
+        D = zeros(num_samples, num_samples)
+        for i in 1:num_samples
+            for j in 1:num_samples
+                D[i,j] = sqrt(sum((all_scenarios[i,:,t] - all_scenarios[j,:,t]).^2))
+            end
+        end
+
+        probabilities, selected_indices = FastForwardSelection(D, fill(1.0 / num_samples, num_samples), reduced_samples)
+
+        for i in 1:reduced_samples
+            reduced_price_scenarios[i,:,t] = all_scenarios[selected_indices[i],:,t]
+            reduced_probabilities[i,t] = probabilities[i]
+        end
+    end
+    return reduced_price_scenarios, reduced_probabilities
+end
 
 function make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices)
     number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, demand_trajectory = load_the_data()
@@ -42,6 +77,44 @@ function make_multistage_here_and_now_decision(number_of_sim_periods, tau, curre
     @variable(model, 0 <= m[w in W, t in 1:lookahead])
 
     # Add your constraints similar to those from previous steps, adjusted for the lookahead
+    # The constraints are now looped over each time stage t in the lookahead, which can be up to 5 days ahead. This replaces the separate demand_1, demand_2, etc., constraints in the two-stage model with a single, unified loop that applies the same logic at each stage.
+    # For t=1, the model uses initial_stock[w] since there's no preceding storage level. For t > 1, it uses z[w, t-1] to represent the storage level from the end of the previous day.
+    # demand_trajectory[w,t] should be used instead of demand[w,1] or demand[w,2], reflecting the specific demand for each warehouse w at each time t.
+    # The model maintains consistency between the amount sent from one warehouse to another and the amount received, as well as ensuring that any coffee sent on a given day was already in stock the day before.
+    # This pattern keeps the core logic of your constraints consistent while allowing them to be applied across more stages. It means your model can dynamically adapt to different lookahead values without needing separate code for each potential stage.
+    # Loop over all time stages for dynamic constraints
+for t in 1:lookahead
+    # First stage constraints when t = 1, subsequent stages otherwise
+    # Demand balance
+    @constraint(model, demand_balance[w in W, t],
+                x[w,t] - z[w,t] + (t == 1 ? initial_stock[w] : z[w,t-1])
+                + sum(y_receive[w,q,t] for q in W)
+                - sum(y_send[w,q,t] for q in W)
+                + m[w,t] == demand_trajectory[w,t])
+
+    # Storage capacity
+    @constraint(model, storage_capacity[w in W, t],
+                z[w,t] <= warehouse_capacities[w])
+
+    # Transportation capacity
+    @constraint(model, transportation_capacity[w in W, q in W, t],
+                y_send[w,q,t] <= transport_capacities[w,q])
+
+    # Consistency between sending and receiving
+    @constraint(model, send_receive_consistency[w in W, q in W, t],
+                y_send[w,q,t] == y_receive[q,w,t])
+
+    # Storage from previous day before transfer, accounting for t=1
+    @constraint(model, storage_before_transfer[w in W, q in W, t],
+                y_send[w,q,t] <= (t == 1 ? initial_stock[w] : z[w,t-1]))
+end
+#Alternative contraint representation if previous one is not working
+#for t in 1:lookahead
+#@constraint(model, x[w in W] - z[w] + (t == 1 ? initial_stock[w] : z[w,t-1]) + sum(y_receive[w,q,t] for q in W) - sum(y_send[w,q,t] for q in W) + m[w,t] == demand_trajectory[w,t] for w in W)
+#@constraint(model, z[w,t] <= warehouse_capacities[w] for w in W)
+#@constraint(model, y_send[w,q,t] <= transport_capacities[w,q] for w in W, q in W)
+#@constraint(model, y_send[w,q,t] == y_receive[q,w,t] for w in W, q in W)
+#end
 
     # Objective function should consider the expected costs over the lookahead period
     @objective(model, Min, sum(cost_miss[w] * m[w,t] for w in W, t in 1:lookahead) + 
