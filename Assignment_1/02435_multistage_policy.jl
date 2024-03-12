@@ -48,7 +48,7 @@ end
 function make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices)
     number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, demand_trajectory = load_the_data()
 
-    # Determine lookahead based on current period tau
+    # Determine lookahead based on current period tau ...
     lookahead = min(5-tau+1, 3)  # Adjust this based on performance requirements
     # 5 - tau + 1: This part calculates how many days are left in the planning horizon from the current day (tau). For example, if today is day 1 (tau = 1), then there are 5 days left in the horizon. If today is day 3 (tau = 3), then there are 3 days left.
     # min(5 - tau + 1, 3): This function then takes the minimum between the number of days left and 3. The purpose of using 3 here is to limit the maximum lookahead to 3 days, regardless of how many days are actually left. This could be due to computational constraints or the belief that looking more than 3 days ahead does not significantly improve decision quality due to increasing uncertainty.
