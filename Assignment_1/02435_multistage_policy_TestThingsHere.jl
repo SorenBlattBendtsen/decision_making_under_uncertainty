@@ -82,6 +82,11 @@ function make_multistage_here_and_now_decision(number_of_sim_periods, tau, curre
     # Essentially, this is the shortfall: the amount by which the warehouse fails to meet the demand. The objective function typically penalizes missing amounts to ensure demands are met as closely as possible.
     @variable(model, 0 <= m_wt[w in W, t in 1:lookahead, s in 1:num_reduced_samples])
 
+    # Generate non-anticipativity sets based on your scenarios
+    # You might need to adjust this to fit the actual format of your scenario data
+    non_anticipativity_sets = create_non_anticipativity_sets(scenarios)  # This needs your real scenarios data
+
+
     # Add your constraints similar to those from previous steps, adjusted for the lookahead
     # The constraints are now looped over each time stage t in the lookahead, which can be up to 5 days ahead. This replaces the separate demand_1, demand_2, etc., constraints in the two-stage model with a single, unified loop that applies the same logic at each stage.
     # For t=1, the model uses initial_stock[w] since there's no preceding storage level. For t > 1, it uses z[w, t-1] to represent the storage level from the end of the previous day.
@@ -113,6 +118,19 @@ function make_multistage_here_and_now_decision(number_of_sim_periods, tau, curre
             # Storage from previous day before transfer, accounting for t=1 per scenario
             @constraint(model, storage_before_transfer[w in W, q in W, t, s],
                         y_send_wqt[w,q,t,s] <= (t == 1 ? initial_stock[w] : z_wt[w,t-1,s]))
+        end
+    end
+
+    # Implement non-anticipativity constraints
+    for (i, j, shared_history) in non_anticipativity_sets
+        for t in 1:shared_history
+        # These constraints ensure that decisions up to the shared history are the same
+        # across the scenarios i and j
+        @constraint(model, [w in W], x_wt[w, t, i] == x_wt[w, t, j])
+        @constraint(model, [w in W], z_wt[w, t, i] == z_wt[w, t, j])
+        @constraint(model, [w in W, q in W], y_send_wqt[w, q, t, i] == y_send_wqt[w, q, t, j])
+        @constraint(model, [w in W, q in W], y_receive_wqt[w, q, t, i] == y_receive_wqt[w, q, t, j])
+        # Add more constraints as necessary for other decision variables that need to comply with non-anticipativity
         end
     end
 
