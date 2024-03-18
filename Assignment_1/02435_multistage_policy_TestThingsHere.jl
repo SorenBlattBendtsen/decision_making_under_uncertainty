@@ -49,6 +49,13 @@ function generate_and_reduce_scenarios(current_prices, num_samples, reduced_samp
     return reduced_price_scenarios, reduced_probabilities
 end
 
+number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, demand_trajectory = load_the_data()
+current_prices = zeros(W)
+for w in W
+    current_prices[w] = rand(Uniform(0,10))
+end
+price_scenarios, probabilities = generate_and_reduce_scenarios(current_prices, 100, 10, 3)
+
 function make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices)
     number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, demand_trajectory = load_the_data()
 
