@@ -23,7 +23,7 @@ end
 
 
 # Example scenarios
-scenarios = [[1, 2, 3], [1, 2, 4], [5, 6, 7]]
+scenarios = [[1.2, 2.3, 3.4], [1.2, 2.3, 4.5], [5.6, 6.7, 7.8]]
 
 # Call the function
 sets = create_non_anticipativity_sets(scenarios)
@@ -32,4 +32,5 @@ sets = create_non_anticipativity_sets(scenarios)
 # - Scenarios 1 and 2 share history up to period 2.
 # - Scenarios 1 and 3 have no shared history.
 # - Scenarios 2 and 3 have no shared history.
+# Print the sets
 println(sets)
