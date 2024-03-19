@@ -6,7 +6,7 @@
 
 
 # Including your policy and the dummy policy
-include("02435_multistage_policy.jl")
+include("../02435_multistage_policy_working_soren.jl")
 #include("02435_multistage_policy_TestThingsHere.jl")
 include("V2_dummy_policy.jl")
 
@@ -29,6 +29,7 @@ z = Dict()
 m = Dict()
 policy_cost = 99999999*ones(number_of_experiments, number_of_sim_periods)
 policy_cost_at_experiment = 99999999*ones(number_of_experiments)
+
 
 # for each experiment
 for e in Expers
@@ -63,7 +64,7 @@ for e in Expers
             global rp = receive[(e,tau)] 
             global zp = z[(e,tau)]
             global mp = m[(e,tau)]
-            x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)] = make_dummy_decision(number_of_sim_periods, tau, current_stock, current_demands, current_prices)
+            x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)] = make_dummy_decision(number_of_sim_periods, tau, current_stock, current_prices)
         end
 
         policy_cost[e,tau] = sum(current_prices[w]*x[(e,tau)][w] + cost_miss[w]*m[(e,tau)][w] + sum(cost_tr[w,q]*receive[(e,tau)][w,q] for q in W) for w in W)  
@@ -73,3 +74,4 @@ end
 
 FINAL_POLICY_COST = sum(policy_cost_at_experiment[e] for e in Expers) / number_of_experiments
 println("THE FINAL POLICY EXPECTED COST IS ", FINAL_POLICY_COST)
+
