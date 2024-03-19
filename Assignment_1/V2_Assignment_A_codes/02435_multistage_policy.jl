@@ -3,8 +3,80 @@
 # Initialization and Data Loading
 using JuMP, Gurobi
 using Distributions
-include("V2_02435_multistage_problem_data.jl")
-include("V2_price_process.jl")
+using Random
+# including "V2_02435_multistage_problem_data.jl" starts here
+function load_the_data()
+
+    number_of_warehouses = 3
+    W = collect(1:number_of_warehouses)
+
+    number_of_simulation_periods = 5
+    sim_T = collect(1:number_of_simulation_periods)
+
+    #Cost of missing demand at w
+    #Call by cost_miss[w]
+    cost_miss = [10,15,20]
+
+    #Distance-based transportation cost for each pair of warehouses w1 and w2
+    #Call by cost_tr[w1,w2]
+    cost_tr = ones(number_of_warehouses, number_of_warehouses)*5
+
+    #Capacity of warehouse w
+    warehouse_capacities = 10*ones(number_of_warehouses)
+
+    #Capacity of the transportation link for each pair of warehouses
+    #Call by transport_capacities[w1,w2]
+    transport_capacities = 4*ones(number_of_warehouses, number_of_warehouses)
+    transport_capacities[3,1] = 0
+    transport_capacities[1,3] = 0
+    for w in W
+        for q in W
+            if w == q
+                transport_capacities[w,q] = 0
+            end
+        end
+    end
+
+    #Initial stock of at w
+    initial_stock = 2*ones(number_of_warehouses)
+
+    demand_trajectory = 4*ones(number_of_warehouses, number_of_simulation_periods)
+
+    return number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, demand_trajectory
+end
+
+#end  # End of module # including "V2_02435_multistage_problem_data.jl" ends here
+
+
+# including "V2_price_process.jl" starts here 
+
+using Distributions
+
+function sample_next(previous_point)
+
+    sample = previous_point + rand(Gamma(1.0, 2.0))*rand(Normal((5 - previous_point)*0.3, 1))
+    
+    if sample < 0
+        sample = 0
+    end
+
+    if sample > 10
+        sample = 10
+    end
+
+    rand_num = rand()
+
+    if rand_num < 0.9
+        price_sample = sample
+    else
+        price_sample = 10
+    end
+
+    return price_sample
+
+end
+
+# including "V2_price_process.jl" ends here 
 
 # Load data and define constants
 number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, demand_trajectory = load_the_data()
@@ -50,7 +122,84 @@ end
 discretized_price_scenarios = discretize_all_prices(initial_price_scenarios, DISCRETE_PRICE_LEVELS)
 
 # Including Fast-Forward Selection for Scenario Reduction
-include("fast-forward-selection.jl")  # Make sure this path is correct
+# including "fast-forward-selection.jl" starts here 
+
+#Performs fast forward selection for the given parameters
+#D = Symmetric distance matrix
+#p = vector of probabilities
+#n = target number of scenarios
+#Returns Array with 2 element, [1] = list of probabilities, [2] = list of selected scenario indices
+function FastForwardSelection(D, p, n)
+    init_d = D
+    not_selected_scenarios = collect(range(1,length(D[:,1]);step=1))
+    selected_scenarios = []
+    while length(selected_scenarios) < n
+        selected = select_scenario(D, p, not_selected_scenarios)
+        deleteat!(not_selected_scenarios, findfirst(isequal(selected), not_selected_scenarios))
+        push!(selected_scenarios, selected)
+        D = UpdateDistanceMatrix(D, selected, not_selected_scenarios)
+    end
+    result_prob = RedistributeProbabilities(D, p, selected_scenarios, not_selected_scenarios)
+    return [result_prob, selected_scenarios]
+end
+
+#Redistributes probabilities at the end of the fast forward selection
+#D = original distance matrix
+#p = probabilities
+#selected_scenarios = indices of selected scenarios
+#not_selected_scenarios = indices of non selected scenarios
+function RedistributeProbabilities(D, p, selected_scenarios, not_selected_scenarios)
+    probabilities = p
+    for s in not_selected_scenarios
+        min_idx = -1
+        min_dist = Inf
+        for i in selected_scenarios
+            if D[s,i] < min_dist
+                min_idx = i
+                min_dist = D[s,i]
+            end
+        end
+        probabilities[min_idx] = probabilities[min_idx] + p[s]
+        probabilities[s] = 0.0
+    end
+    new_probabilities = [probabilities[i] for i in selected_scenarios]
+    return new_probabilities
+end
+
+#Updates the distance matrix in the fast forward selection
+#D = current distance matrix
+#selected = index of scenario selected in this iteration
+#scenarios = index list of not selected scenarios
+function UpdateDistanceMatrix(D, selected, not_selected_scenarios)
+    for s in not_selected_scenarios
+        if s!=selected
+            for s2 in not_selected_scenarios
+                if s2!=selected
+                    D[s,s2] = min(D[s,s2], D[s,selected])
+                end
+            end
+        end
+    end
+    return D
+end
+
+#Selects the scenario idx with minimum Kantorovic distance
+#D = Distance matrix
+#p = probabilities
+#scenarios = not selected scenarios
+function select_scenario(D, p, not_selected_scenarios)
+    min_dist = Inf
+    min_idx = -1
+    for s in not_selected_scenarios
+        dist = sum(p[s2]*D[s2,s] for s2 in not_selected_scenarios if s!=s2)
+        if dist < min_dist
+            min_dist = dist
+            min_idx = s
+        end
+    end
+    return min_idx
+end
+# including the fast forward selection file ends here
 
 # Function to calculate distance matrix for scenario reduction
 function calculate_distance_matrix(prices::Array{Float64,3})
