@@ -4,147 +4,194 @@ using JuMP
 using Gurobi
 using Distributions
 using Random
+using Plots
 # Make sure this script is saved in the same directory as your other .jl files
 include("V2_Assignment_A_codes/V2_02435_multistage_problem_data.jl")
 include("fast-forward-selection.jl")
 include("V2_Assignment_A_codes/V2_price_process.jl")
 
 
-# Placeholder function for generating and reducing scenarios
-# This part needs to be filled in with your logic based on your chosen approach
-# Function for generating and reducing scenarios
-function generate_and_reduce_scenarios(current_prices, num_samples, reduced_samples, lookahead)
-    # Initialize matrices to store the generated and reduced scenarios
-    all_scenarios = Array{Float64,3}(undef, num_samples, length(current_prices), lookahead)
-    reduced_price_scenarios = Array{Float64,3}(undef, reduced_samples, length(current_prices), lookahead)
-    reduced_probabilities = zeros(reduced_samples, lookahead)
+
+function generate_price_scenarios(current_prices, W, T, S)
+    # Initialize the output matrix
+    price_scenarios = zeros(W, T, S)
     
-    for t in 1:lookahead
-        for s in 1:num_samples
-            for w in 1:length(current_prices)
-                #The function sample_next needs to be defined properly to simulate future prices based on your specific model.
-                # I used the sample next function generated in V2_price_process.jl file
-                all_scenarios[s,w,t] = sample_next(current_prices[w])
+    sqrt_S = ceil(Int, sqrt(S))
+    if T == 3
+        for w in 1:W
+            for s in 1:S
+                for t in 1:T
+                    if t == 1
+                        price_scenarios[w, t, s] = current_prices[w] # Using the first scenario from t = 2
+                    elseif t == 2
+                        if s <= sqrt_S
+                            price_scenarios[w, t, s] = sample_next(current_prices[w])
+                        else
+                            price_scenarios[w, t, s] = price_scenarios[w, t, s-sqrt_S]
+                        end 
+                        #continue # Scenarios already filled in the previous loop
+                    else
+                        price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) # Using the same scenarios from t = 3
+                    end
+                end
             end
         end
-
-        D = zeros(num_samples, num_samples)
-        for i in 1:num_samples
-            for j in 1:num_samples
-                D[i,j] = sqrt(sum((all_scenarios[i,:,t] - all_scenarios[j,:,t]).^2))
+    elseif T == 2
+        for w in 1:W
+            for s in 1:S
+                for t in 1:T
+                    if t == 1
+                        price_scenarios[w, t, s] = current_prices[w] 
+                    else
+                        price_scenarios[w, t, s] = sample_next(current_prices[w])
+                    end
+                end
             end
         end
-
-        probabilities, selected_indices = FastForwardSelection(D, fill(1.0 / num_samples, num_samples), reduced_samples)
-
-        for i in 1:reduced_samples
-            reduced_price_scenarios[i,:,t] = all_scenarios[selected_indices[i],:,t]
-            reduced_probabilities[i,t] = probabilities[i]
+    else # T == 1
+        for w in 1:W
+            for s in 1:S
+                for t in 1:T
+                    price_scenarios[w, t, s] = current_prices[w] 
+                end
+            end
         end
     end
-    return reduced_price_scenarios, reduced_probabilities
+        
+    return price_scenarios
 end
-number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, demand_trajectory = load_the_data()
-current_prices = zeros(W)
-for w in W
-    current_prices[w] = rand(Uniform(0,10))
+
+# Example usage:
+#price_scenarios = generate_price_scenarios(current_prices, number_of_warehouses, lookahead, num_samples)
+
+function reduce_scenarios(price_scenarios, num_reduced)
+    # Calculate distance matrix (euclidean distance) for scenario reduction
+    S = size(price_scenarios, 3)
+    D = zeros(Float64, S, S)
+    for i = 1:S
+        for j = 1:S
+            D[i,j] = sqrt(sum((price_scenarios[l,end,i]-price_scenarios[l,end,j])*(price_scenarios[l,end,i]-price_scenarios[l,end,j])  for l = 1:number_of_warehouses))
+        end
+    end
+
+    # Initialize equiprobable probabilities
+    probabilities = repeat([1.0/S], 1, S)[1,:]
+    # Use fast forward selection and apply it to get the reduced scenarios and updated probabilities
+    result = FastForwardSelection(D, probabilities, num_reduced)
+    # Resulting probabilities
+    reduced_probabilities = result[1]
+    # Selected scenario indices
+    reduced_scenario_indices = result[2]
+    # Filter price_scenarios based on reduced_scenario_indices
+    reduced_price_scenarios = zeros(Float64, number_of_warehouses, lookahead, num_reduced)
+    for i = 1:num_reduced
+        reduced_price_scenarios[:,:,i] = price_scenarios[:,:,reduced_scenario_indices[i]]
+    end
+
+    return reduced_price_scenarios, reduced_probabilities, reduced_scenario_indices
 end
-price_scenarios, probabilities = generate_and_reduce_scenarios(current_prices, 100, 10, 3)
+# example usage
+num_reduced = 256
+#reduced_price_scenarios, reduced_probabilities, reduced_scenario_indices = reduce_scenarios(price_scenarios, num_reduced)
 
-function make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices)
-    number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, demand_trajectory = load_the_data()
+# for 1 warehouse at t=3, plot the original scenarios in gray and the reduced scenarios in color on top
+# transpose price_scenarios for plotting
+function plot_reduced_scenarios(price_scenarios, reduced_scenario_indices, num_reduced, number_of_warehouses, W)
+    p_wt_scenarios_t = transpose(price_scenarios[:,3,:])
+    plot(price_scenarios[:,3,:], xlabel="Warehouse", ylabel="Price", title="Reduced price scenarios", color=:lightgray, legend=false, alpha=0.8, xticks=(1:number_of_warehouses, W))
+    # plot reduced scenarios
+    reduced_data = zeros(Float64, number_of_warehouses, num_reduced)
+    for i = 1:num_reduced
+        reduced_data[:, i] = price_scenarios[:,3,reduced_scenario_indices[i]]
+    end
+    plot!(reduced_data, legend=false, color=:auto)
+end 
 
-    # Determine lookahead based on current period tau ...
-    lookahead = min(5-tau+1, 3)  # Adjust this based on performance requirements
-    # 5 - tau + 1: This part calculates how many days are left in the planning horizon from the current day (tau). For example, if today is day 1 (tau = 1), then there are 5 days left in the horizon. If today is day 3 (tau = 3), then there are 3 days left.
-    # min(5 - tau + 1, 3): This function then takes the minimum between the number of days left and 3. The purpose of using 3 here is to limit the maximum lookahead to 3 days, regardless of how many days are actually left. This could be due to computational constraints or the belief that looking more than 3 days ahead does not significantly improve decision quality due to increasing uncertainty.
+function multi_stage_program(current_prices, number_of_warehouses, T_lookahead, S_samples, S_reduced)
+    W = collect(1:number_of_warehouses)
+    T = collect(1:T_lookahead)
+    S = collect(1:S_reduced)
+    price_scenarios = generate_price_scenarios(current_prices, number_of_warehouses, T_lookahead, S_samples)
+    reduced_price_scenarios, reduced_probabilities, reduced_scenario_indices = reduce_scenarios(price_scenarios, S_reduced)
+    model_2 = Model(Gurobi.Optimizer)
+    # variables
+    @variable(model_2, 0 <= x_wts[w in W, t in T, s in S]) # Coffee ordered at warehouse w
+    @variable(model_2, 0 <= z_wts[w in W, t in T, s in S]) # Coffee stored at warehouse w
+    @variable(model_2, 0 <= y_send_wqts[w in W, q in W, t in T, s in S]) # Coffee sent from warehouse w to warehouse q
+    @variable(model_2, 0 <= y_receive_wqts[w in W, q in W, t in T, s in S]) # Coffee received at warehouse w from warehouse q
+    @variable(model_2, 0 <= m_wts[w in W, t in T, s in S]) # Missing demand at warehouse w
+    # Count and print total number of decision variables
+    println("Total number of decision variables: ", num_variables(model_2))
 
-    # Sample a limited number of future price scenarios and their probabilities
-    # Depending on your computational constraints, adjust the number of samples and how they're reduced
-    num_samples = 100  # Reduced number of samples due to computational constraints
-    reduced_samples = 10  # Further reduction for scenario handling within constraints
+    @objective(model_2, Min, 
+                            sum(reduced_probabilities[s] 
+                            * (sum(cost_tr[w,q]*y_send_wqts[w,q,t,s] for w in W, q in W, t in T) 
+                            + sum(cost_miss[w]*m_wts[w,t,s] for w in W, t in T)
+                            + sum(reduced_price_scenarios[w,t,s]*x_wts[w,t,s] for w in W, t in T))
+                            for s in S))
 
-    # Generate price scenarios for lookahead days (this should include scenario reduction logic)
-    # Placeholder for actual scenario generation logic
-    price_scenarios, probabilities = generate_and_reduce_scenarios(current_prices, num_samples, reduced_samples, lookahead)
-
-    # Set up the optimization problem
-    model = Model(Gurobi.Optimizer)
-    # Decision variables should also be indexed by scenarios..
-    # This variable represents the amount of coffee (or other goods) ordered by warehouse w (where w is an index running through all warehouses in the set W) at time t (where t ranges from 1 to the value of lookahead).
-    # is a decision variable, meaning the model will determine the optimal quantity of coffee to order for each warehouse at each time step within the lookahead horizon to minimize the total cost.
-    @variable(model, 0 <= x[w in W, t in 1:lookahead,s in 1:reduced_samples])
-    # This variable indicates the storage level (amount of coffee stored) at warehouse w at time t.
-    # Like x, z is a decision variable optimized by the model, respecting the constraints like storage capacities and ensuring that coffee is available to meet demand or to be sent to other warehouses.
-    @variable(model, 0 <= z[w in W, t in 1:lookahea, s in 1:reduced_samples])
-    # This variable represents the amount of coffee sent from warehouse w to another warehouse q at time t.
-    # The indices w and q both range over all warehouses (but typically, a warehouse will not send coffee to itself, hence w should not equal q), and t ranges over the lookahead period.
-    # This is another decision variable that the model will optimize, taking into account transportation limits and costs.
-    @variable(model, 0 <= y_send[w in W, q in W, t in 1:lookahead, s in 1:reduced_samples])
-    # In contrast to y_send, this variable denotes the amount of coffee received by warehouse w from warehouse q at time t.
-    # While the physical reality would dictate that y_receive is closely tied to y_send (i.e., what one warehouse sends, another receives), they are kept separate in the model for clarity and to enforce the symmetry through constraints.
-    @variable(model, 0 <= y_receive[w in W, q in W, t in 1:lookahead, s in 1:reduced_samples])
-    # This variable represents the missing amount of coffee (unmet demand) at warehouse w at time t.
-    # Essentially, this is the shortfall: the amount by which the warehouse fails to meet the demand. The objective function typically penalizes missing amounts to ensure demands are met as closely as possible.
-    @variable(model, 0 <= m[w in W, t in 1:lookahead, s in 1:reduced_samples])
-
-
-    @objective(model, Min, sum(probabilities[t,s]*(
-        sum(price[w,t,s] * x_wt[w,t,s] for w in W) 
-        + sum(cost_miss[w] * m_wt[w,t,s] for w in W) 
-        + sum(cost_tr[w,q] * y_send_wqt[w,q,t,s] for w in W, q in W)) 
-        for s in 1:num_reduced_samples, t in 1:lookahead))
-
-    # Add your constraints similar to those from previous steps, adjusted for the lookahead
-    # The constraints are now looped over each time stage t in the lookahead, which can be up to 5 days ahead. This replaces the separate demand_1, demand_2, etc., constraints in the two-stage model with a single, unified loop that applies the same logic at each stage.
-    # For t=1, the model uses initial_stock[w] since there's no preceding storage level. For t > 1, it uses z[w, t-1] to represent the storage level from the end of the previous day.
-    # demand_trajectory[w,t] should be used instead of demand[w,1] or demand[w,2], reflecting the specific demand for each warehouse w at each time t.
-    # The model maintains consistency between the amount sent from one warehouse to another and the amount received, as well as ensuring that any coffee sent on a given day was already in stock the day before.
-    # This pattern keeps the core logic of your constraints consistent while allowing them to be applied across more stages. It means your model can dynamically adapt to different lookahead values without needing separate code for each potential stage.
-    # Loop over all time stages for dynamic constraints
-for t in 1:lookahead
-    # First stage constraints when t = 1, subsequent stages otherwise
+    # constraints
     # Demand balance
-    @constraint(model, demand_balance[w in W, t in 1:lookahead, s in 1:reduced_samples],
-                x[w,t,s] - z[w,t,s] + (t == 1 ? initial_stock[w] : z[w,t-1])
-                + sum(y_receive[w,q,t,s] for q in W)
-                - sum(y_send[w,q,t,s] for q in W)
-                + m[w,t,s] == demand_trajectory[w,t])
+    @constraint(model_2, demand_1[w in W, s in S],
+                x_wts[w,1,s] - z_wts[w,1,s] + initial_stock[w]
+                + sum(y_receive_wqts[w,q,1,s] for q in W)
+                - sum(y_send_wqts[w,q,1,s] for q in W)
+                + m_wts[w,1,s] == demand[w,1])
+
+    @constraint(model_2, demand_t[w in W, t in T[2:end], s in S],
+                x_wts[w,t,s] - z_wts[w,t,s] + z_wts[w,t-1,s]
+                + sum(y_receive_wqts[w,q,t,s] for q in W)
+                - sum(y_send_wqts[w,q,t,s] for q in W)
+                + m_wts[w,t,s] == demand[w,t])
 
     # Storage capacity
-    @constraint(model, storage_capacity[w in W, t in 1:lookahead, s in 1:reduced_samples],
-                z[w,t,s] <= warehouse_capacities[w])
+    @constraint(model_2, storage_capacity[w in W, t in T, s in S],
+                z_wts[w,t,s] <= warehouse_capacities[w])
 
     # Transportation capacity
-    @constraint(model, transportation_capacity[w in W, q in W, t in 1:lookahead, s in 1:reduced_samples],
-                y_send[w,q,t,s] <= transport_capacities[w,q])
+    @constraint(model_2, transportation_capacity[w in W, q in W, t in T, s in S],
+                y_send_wqts[w,q,t,s] <= transport_capacities[w,q])
 
-    # Consistency between sending and receiving
-    @constraint(model, send_receive_consistency[w in W, q in W, t in 1:lookahead, s in 1:reduced_samples],
-                y_send[w,q,t,s] == y_receive[q,w,t,s])
+    # Constraint saying the amount sent from w to q is the same as received at q from w
+    @constraint(model_2, send_receive_1[w in W, q in W, t in T, s in S], 
+                y_send_wqts[w,q,t,s] == y_receive_wqts[q,w,t,s])
 
-    # Storage from previous day before transfer, accounting for t=1
-    @constraint(model, storage_before_transfer[w in W, q in W, t in 1:lookahead, s in 1:reduced_samples],
-                y_send[w,q,t,s] <= (t == 1 ? initial_stock[w] : z[w,t-1]))
+    #Storage one day before transfer, initial stock in t=1
+    @constraint(model_2, storage_1[w in W, q in W, s in S],
+                y_send_wqts[w,q,1,s] <= initial_stock[w])
+
+    @constraint(model_2, storage_t[w in W, q in W, t in T[2:end], s in S],
+                y_send_wqts[w,q,t,s] <= z_wts[w,t-1,s])
+
+    optimize!(model_2)
+
+    # Print the objective value and the optimal solution for the first stage variables
+    if termination_status(model_2) == MOI.OPTIMAL
+        #println("Solve time: ", MOI.get(model_2, MOI.SolveTime()))
+        println("Optimal solution found")
+        println("Objective value: ", objective_value(model_2))
+        println("Period 1:")
+        for w in W
+            println("Warehouse ", w)
+            println("x_wts: ", mean(value.(x_wts[w,1,:])))
+            println("z_wts: ", mean(value.(z_wts[w,1,:])))
+            println("y_send_wqts: ", mean(value.(y_send_wqts[w,:,1,:])))
+            println("y_receive_wqts: ", mean(value.(y_receive_wqts[w,:,1,:])))
+            println("m_wts: ", mean(value.(m_wts[w,1,:])))
+        end
+    end
+end 
+
+
+number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock = load_the_data()
+current_prices = zeros(number_of_warehouses)
+for w in W
+    current_prices[w] = round.(rand(Uniform(0,10)), digits=2)
 end
+tau=1
+T_lookahead = min(5-tau+1, 3)
+demand = 4*ones(number_of_warehouses, T_lookahead)
+S_samples = 2500
+S_reduced = 256
 
-#Alternative contraint representation if previous one is not working
-#for t in 1:lookahead
-#@constraint(model, x[w in W] - z[w] + (t == 1 ? initial_stock[w] : z[w,t-1]) + sum(y_receive[w,q,t] for q in W) - sum(y_send[w,q,t] for q in W) + m[w,t] == demand_trajectory[w,t] for w in W)
-#@constraint(model, z[w,t] <= warehouse_capacities[w] for w in W)
-#@constraint(model, y_send[w,q,t] <= transport_capacities[w,q] for w in W, q in W)
-#@constraint(model, y_send[w,q,t] == y_receive[q,w,t] for w in W, q in W)
-#end
-    
-    optimize!(model)
-
-    # Extract here-and-now decisions (for tau = 1) and prepare them for return
-    x_decision = value.(x[:,1])
-    z_decision = value.(z[:,1])
-    send_decision = value.(y_send[:,:,1])
-    receive_decision = value.(y_receive[:,:,1])
-    m_decision = value.(m[:,1])
-
-    return x_decision, send_decision, receive_decision, z_decision, m_decision
-end
-
+multi_stage_program(current_prices, number_of_warehouses, T_lookahead, S_samples, S_reduced)
