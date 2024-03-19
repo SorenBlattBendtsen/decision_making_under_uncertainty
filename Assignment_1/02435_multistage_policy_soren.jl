@@ -5,12 +5,13 @@ using Gurobi
 using Distributions
 using Random
 using Plots
+using BenchmarkTools
+# Set seed for reproducibility
+Random.seed!(1234)
 # Make sure this script is saved in the same directory as your other .jl files
 include("V2_Assignment_A_codes/V2_02435_multistage_problem_data.jl")
 include("fast-forward-selection.jl")
 include("V2_Assignment_A_codes/V2_price_process.jl")
-
-
 
 function generate_price_scenarios(current_prices, W, T, S)
     # Initialize the output matrix
@@ -83,7 +84,7 @@ function reduce_scenarios(price_scenarios, num_reduced)
     # Selected scenario indices
     reduced_scenario_indices = result[2]
     # Filter price_scenarios based on reduced_scenario_indices
-    reduced_price_scenarios = zeros(Float64, number_of_warehouses, lookahead, num_reduced)
+    reduced_price_scenarios = zeros(Float64, number_of_warehouses, T_lookahead, num_reduced)
     for i = 1:num_reduced
         reduced_price_scenarios[:,:,i] = price_scenarios[:,:,reduced_scenario_indices[i]]
     end
@@ -91,7 +92,6 @@ function reduce_scenarios(price_scenarios, num_reduced)
     return reduced_price_scenarios, reduced_probabilities, reduced_scenario_indices
 end
 # example usage
-num_reduced = 256
 #reduced_price_scenarios, reduced_probabilities, reduced_scenario_indices = reduce_scenarios(price_scenarios, num_reduced)
 
 # for 1 warehouse at t=3, plot the original scenarios in gray and the reduced scenarios in color on top
@@ -120,8 +120,6 @@ function multi_stage_program(current_prices, number_of_warehouses, T_lookahead, 
     @variable(model_2, 0 <= y_send_wqts[w in W, q in W, t in T, s in S]) # Coffee sent from warehouse w to warehouse q
     @variable(model_2, 0 <= y_receive_wqts[w in W, q in W, t in T, s in S]) # Coffee received at warehouse w from warehouse q
     @variable(model_2, 0 <= m_wts[w in W, t in T, s in S]) # Missing demand at warehouse w
-    # Count and print total number of decision variables
-    println("Total number of decision variables: ", num_variables(model_2))
 
     @objective(model_2, Min, 
                             sum(reduced_probabilities[s] 
@@ -163,21 +161,34 @@ function multi_stage_program(current_prices, number_of_warehouses, T_lookahead, 
     @constraint(model_2, storage_t[w in W, q in W, t in T[2:end], s in S],
                 y_send_wqts[w,q,t,s] <= z_wts[w,t-1,s])
 
+    # Non anticipativity constraints for stage 1
+    @constraint(model_2, non_anticipativity_x[w in W, s in S],
+                x_wts[w,1,s] == x_wts[w,1,1])
+    @constraint(model_2, non_anticipativity_z[w in W, s in S],
+                z_wts[w,1,s] == z_wts[w,1,1])
+    @constraint(model_2, non_anticipativity_y_send[w in W, q in W, s in S],
+                y_send_wqts[w,q,1,s] == y_send_wqts[w,q,1,1])
+    @constraint(model_2, non_anticipativity_y_receive[w in W, q in W, s in S],
+                y_receive_wqts[w,q,1,s] == y_receive_wqts[w,q,1,1])
+    @constraint(model_2, non_anticipativity_m[w in W, s in S],
+                m_wts[w,1,s] == m_wts[w,1,1])
+
+
     optimize!(model_2)
 
     # Print the objective value and the optimal solution for the first stage variables
     if termination_status(model_2) == MOI.OPTIMAL
-        #println("Solve time: ", MOI.get(model_2, MOI.SolveTime()))
         println("Optimal solution found")
+        println("Total number of decision variables: ", num_variables(model_2))
         println("Objective value: ", objective_value(model_2))
         println("Period 1:")
         for w in W
             println("Warehouse ", w)
-            println("x_wts: ", mean(value.(x_wts[w,1,:])))
-            println("z_wts: ", mean(value.(z_wts[w,1,:])))
-            println("y_send_wqts: ", mean(value.(y_send_wqts[w,:,1,:])))
-            println("y_receive_wqts: ", mean(value.(y_receive_wqts[w,:,1,:])))
-            println("m_wts: ", mean(value.(m_wts[w,1,:])))
+            println("x_wts: ", value.(x_wts[w,1,1]))
+            println("z_wts: ", mean(value.(z_wts[w,1,1])))
+            println("y_send_wqts: ", value.(y_send_wqts[w,:,1,1]))
+            println("y_receive_wqts: ", value.(y_receive_wqts[w,:,1,1]))
+            println("m_wts: ", value.(m_wts[w,1,1]))
         end
     end
 end 
@@ -191,7 +202,9 @@ end
 tau=1
 T_lookahead = min(5-tau+1, 3)
 demand = 4*ones(number_of_warehouses, T_lookahead)
-S_samples = 2500
-S_reduced = 256
+S_samples = 1000
+S_reduced = 75
 
-multi_stage_program(current_prices, number_of_warehouses, T_lookahead, S_samples, S_reduced)
+@time begin
+    multi_stage_program(current_prices, number_of_warehouses, T_lookahead, S_samples, S_reduced)
+end 
