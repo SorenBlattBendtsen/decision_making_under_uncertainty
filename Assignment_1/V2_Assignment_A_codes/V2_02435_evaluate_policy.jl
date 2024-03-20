@@ -6,7 +6,7 @@
 
 
 # Including your policy and the dummy policy
-include("../02435_multistage_policy_working_soren.jl")
+include("../02435_multistage_policy_final.jl")
 #include("02435_multistage_policy_TestThingsHere.jl")
 include("V2_dummy_policy.jl")
 
