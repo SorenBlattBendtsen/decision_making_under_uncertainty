@@ -16,35 +16,35 @@ include("V2_Assignment_A_codes/V2_price_process.jl")
 function generate_price_scenarios(current_prices, number_of_warehouses, T_lookahead, S_samples)
     # Initialize the output matrix
     price_scenarios = zeros(Float64, number_of_warehouses, T_lookahead, S_samples)
-    
+    # Depending on the number of stages, fill the price scenarios matrix accordingly.
+    # Always use the price from the previous stage to sample the next price
     sqrt_S = ceil(Int, sqrt(S_samples))
     if T_lookahead == 5 
         for w in 1:number_of_warehouses
             for s in 1:S_samples
                 for t in 1:T_lookahead
                     if t == 1
-                        price_scenarios[w, t, s] = current_prices[w] # Using the first scenario from t = 2
+                        price_scenarios[w, t, s] = current_prices[w] # Stage 1 price is the current price for all scenarios
                     elseif t == 2
                         if s <= ceil(Int, sqrt(sqrt(sqrt_S)))
-                            price_scenarios[w, t, s] = sample_next(current_prices[w])
+                            price_scenarios[w, t, s] = sample_next(current_prices[w]) # Sample a new price for the first sqrt(sqrt(sqrt(S))) scenarios
                         else
-                            price_scenarios[w, t, s] = price_scenarios[w, t, s-ceil(Int, sqrt(sqrt(sqrt_S)))]
+                            price_scenarios[w, t, s] = price_scenarios[w, t, s-ceil(Int, sqrt(sqrt(sqrt_S)))] # Use the same price as the previous sqrt(sqrt(sqrt(S))) scenarios
                         end 
-                        #continue # Scenarios already filled in the previous loop
                     elseif t == 3
                         if s <= ceil(Int, sqrt(sqrt_S))
-                            price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s])
+                            price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) # Sample a new price for the first sqrt(sqrt(S)) scenarios
                         else
-                            price_scenarios[w, t, s] = price_scenarios[w, t, s-ceil(Int, sqrt(sqrt_S))]
+                            price_scenarios[w, t, s] = price_scenarios[w, t, s-ceil(Int, sqrt(sqrt_S))] # Use the same price as the previous sqrt(sqrt(S)) scenarios
                         end 
                     elseif t == 4
                         if s <= sqrt_S
-                            price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s])
+                            price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) # Sample a new price for the first sqrt(S) scenarios
                         else
-                            price_scenarios[w, t, s] = price_scenarios[w, t, s-sqrt_S]
+                            price_scenarios[w, t, s] = price_scenarios[w, t, s-sqrt_S] # Use the same price as the previous sqrt(S) scenarios
                         end 
                     else
-                        price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) # Using the same scenarios from t = 3
+                        price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) # Sample a new unique price for all scenarios
                     end
                 end
             end
@@ -54,23 +54,21 @@ function generate_price_scenarios(current_prices, number_of_warehouses, T_lookah
             for s in 1:S_samples
                 for t in 1:T_lookahead
                     if t == 1
-                        price_scenarios[w, t, s] = current_prices[w] # Using the first scenario from t = 2
+                        price_scenarios[w, t, s] = current_prices[w] 
                     elseif t == 2
                         if s <= ceil(Int, sqrt(sqrt_S))
                             price_scenarios[w, t, s] = sample_next(current_prices[w])
                         else
                             price_scenarios[w, t, s] = price_scenarios[w, t, s-ceil(Int,sqrt(sqrt_S))]
                         end 
-                        #continue # Scenarios already filled in the previous loop
                     elseif t == 3
                         if s <= sqrt_S
                             price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s])
                         else
                             price_scenarios[w, t, s] = price_scenarios[w, t, s-sqrt_S]
                         end 
-                        #continue # Scenarios already filled in the previous loop
                     else
-                        price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) # Using the same scenarios from t = 3
+                        price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) 
                     end
                 end
             end
@@ -80,16 +78,15 @@ function generate_price_scenarios(current_prices, number_of_warehouses, T_lookah
             for s in 1:S_samples
                 for t in 1:T_lookahead
                     if t == 1
-                        price_scenarios[w, t, s] = current_prices[w] # Using the first scenario from t = 2
+                        price_scenarios[w, t, s] = current_prices[w] 
                     elseif t == 2
                         if s <= sqrt_S
                             price_scenarios[w, t, s] = sample_next(current_prices[w])
                         else
                             price_scenarios[w, t, s] = price_scenarios[w, t, s-sqrt_S]
                         end 
-                        #continue # Scenarios already filled in the previous loop
                     else
-                        price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) # Using the same scenarios from t = 3
+                        price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s])
                     end
                 end
             end
@@ -174,11 +171,11 @@ function plot_reduced_scenarios(price_scenarios, reduced_scenario_indices, num_r
 end 
 
 # Define the function to make a multistage here and now decision
-function make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices)
+function make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices, current_demands)
     # Get relevant input data
     S_samples = 1500
-    S_reduced = 45
-    T_lookahead = min(number_of_sim_periods-tau+1, 5)
+    S_reduced = 80
+    T_lookahead = min(number_of_sim_periods-tau+1, 3)
     W = collect(1:number_of_warehouses)
     #T = collect(tau:tau+T_lookahead-1)
     T = collect(1:T_lookahead)
@@ -297,5 +294,5 @@ end
 # m = Dict()
 
 # @time begin
-#     x, send, receive, z, m = make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices)
+#     x, send, receive, z, m = make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices, current_demands)
 # end 

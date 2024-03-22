@@ -46,7 +46,7 @@ for e in Expers
         current_prices = Price_experiments[e,:,tau]
 
         # Call policy to make a decision for here and now
-        x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)] = make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices)
+        x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)] = make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices, current_demands)
         
         
         #Check whether the policy's here and now decisions are feasible/meaningful
