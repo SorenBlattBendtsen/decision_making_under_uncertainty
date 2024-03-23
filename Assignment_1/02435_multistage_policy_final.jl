@@ -177,7 +177,6 @@ function make_multistage_here_and_now_decision(number_of_sim_periods, tau, curre
     S_reduced = 80
     T_lookahead = min(number_of_sim_periods-tau+1, 3)
     W = collect(1:number_of_warehouses)
-    #T = collect(tau:tau+T_lookahead-1)
     T = collect(1:T_lookahead)
     S = collect(1:S_reduced)
     price_scenarios = generate_price_scenarios(current_prices, number_of_warehouses, T_lookahead, S_samples)
@@ -264,14 +263,6 @@ function make_multistage_here_and_now_decision(number_of_sim_periods, tau, curre
         receive = value.(y_receive_wqts[:,:,1,1])
         z = value.(z_wts[:,1,1])
         m = value.(m_wts[:,1,1])
-        # for w in W
-        #     println("Warehouse ", w)
-        #     println("x_wts: ", x[w])
-        #     println("z_wts: ", z[w])
-        #     println("y_send_wqts: ", send[w,:])
-        #     println("y_receive_wqts: ", receive[w,:])
-        #     println("m_wts: ", m[w])
-        # end
     end
     return x, send, receive, z, m
 end 

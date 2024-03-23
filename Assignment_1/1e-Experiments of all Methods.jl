@@ -62,7 +62,7 @@ for i in 1:number_of_experiments
     result_oih = Calculate_OiH_solution(price_oih[i,:,:])
     oih_system_costs[i] = result_oih[1]
     print("Running Expected Value")
-    result_ev = make_EV_here_and_now_decision(price[i,:,1])
+    result_ev = Make_EV_here_and_now_decision(price[i,:,1])
     ev_system_costs[i] = result_ev[1]
     print("Running Two-Stage")
     j = 1

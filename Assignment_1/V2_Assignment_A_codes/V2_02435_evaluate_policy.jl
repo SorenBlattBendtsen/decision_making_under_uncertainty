@@ -7,10 +7,10 @@
 
 # Including your policy and the dummy policy
 include("../02435_multistage_policy_final.jl")
+# Including the EV policy
+#include("../EV LookAhead.jl")
 #include("02435_multistage_policy_TestThingsHere.jl")
 include("V2_dummy_policy.jl")
-#include the EV program for comparison
-include("../EV LookAhead.jl")
 
 include("V2_02435_multistage_problem_data.jl")
 # Loading the problem's parameters
@@ -32,7 +32,6 @@ m = Dict()
 policy_cost = 99999999*ones(number_of_experiments, number_of_sim_periods)
 policy_cost_at_experiment = 99999999*ones(number_of_experiments)
 
-
 # for each experiment
 for e in Expers
     # and for each timeslot of the horizon
@@ -49,8 +48,8 @@ for e in Expers
 
         # Call policy to make a decision for here and now
         x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)] = make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices, current_demands)
-         # for EV program comparison
-        #x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)] = make_EV_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices)
+        # for EV program comparison
+        #x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)] = make_EV_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices, current_demands)
         
         #Check whether the policy's here and now decisions are feasible/meaningful
         successful = check_feasibility(x[(e,tau)], send[(e,tau)], receive[(e,tau)], z[(e,tau)], m[(e,tau)], current_stock, current_demands,  warehouse_capacities, transport_capacities)

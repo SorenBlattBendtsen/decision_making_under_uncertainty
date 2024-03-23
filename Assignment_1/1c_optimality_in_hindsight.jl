@@ -62,20 +62,6 @@ function Calculate_OiH_solution(price)
     # Return the optimal solution
     if termination_status(model_1c) == MOI.OPTIMAL
         println("Optimal solution found")
-        # for t in sim_T
-        #     println("Period ", t)
-        #     for w in W
-        #         println("Warehouse ", w)
-        #         @printf("Order: %0.3f\n", value(x_wt[w,t]))
-        #         @printf("Storage: %0.3f\n", value(z_wt[w,t]))
-        #         for q in W
-        #             if q != w
-        #                 @printf("Send to warehouse %i: %0.3f\n", q, value(y_send_wqt[w,q,t]))
-        #                 @printf("Receive from warehouse %i: %0.3f\n", q, value(y_receive_wqt[w,q,t]))
-        #             end
-        #         end
-        #     end
-        # end
         system_cost = objective_value(model_1c)
         println("Total system cost: ", system_cost)
     else

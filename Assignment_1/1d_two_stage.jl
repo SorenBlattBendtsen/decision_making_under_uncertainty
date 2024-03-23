@@ -64,7 +64,7 @@ end
 function Make_Stochastic_here_and_now_decision(p_wt, S, num_reduced)
 
     # Generate the reduced price scenarios and their probabilities
-    price_scenarios, probabilities = Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, true)
+    price_scenarios, probabilities = Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, false)
     N = collect(1:num_reduced) # reduced number of scenarios
     # Define the model
     model_1d = Model(Gurobi.Optimizer)
@@ -147,62 +147,6 @@ function Make_Stochastic_here_and_now_decision(p_wt, S, num_reduced)
     # Return the optimal solution
     if termination_status(model_1d) == MOI.OPTIMAL
         println("Optimal solution found")
-        # Print results for Day 1
-        # println("Day 1:")
-        # for w in W
-        #     println("Warehouse ", w)
-        #     @printf("Price: %0.3f\n", value(p_wt[w]))
-        #     @printf("Order: %0.3f\n", value(x_wt[w]))
-        #     @printf("Storage: %0.3f\n", value(z_wt[w]))
-        #     for q in W
-        #         if q != w
-        #             @printf("Send to warehouse %i: %0.3f\n", q, value(y_send_wqt[w,q]))
-        #             @printf("Receive from warehouse %i: %0.3f\n", q, value(y_receive_wqt[w,q]))
-        #         end
-        #     end
-        # end
-             
-        # println("-------")
-
-        # # Print results for Day 2
-        # println("Day 2:")
-        # for s in N
-        #     println("Scenario" , s)
-        #     for w in W
-        #         println("Warehouse ", w)
-        #         @printf("Expected Price: %0.3f\n", value(price_scenarios[s,w]))
-        #         @printf("Order: %0.3f\n", value(x_wt_scen[w,s]))
-        #         @printf("Storage: %0.3f\n", value(z_wt_scen[w,s]))
-        #     for q in W
-        #         if q != w
-        #             @printf("Send to warehouse %i: %0.3f\n", q, value(y_send_wqt_scen[w,q,s]))
-        #             @printf("Receive from warehouse %i: %0.3f\n", q, value(y_receive_wqt_scen[w,q,s]))
-        #         end
-        #     end 
-        #     end
-        # end
-        # Extract values for Day 1
-        # prices_day_1 = value.(p_wt)
-        # orders_day_1 = value.(x_wt)
-        # storage_day_1 = value.(z_wt)
-        # send_receive_day_1 = value.(y_send_wqt)
-
-        # # Extract values for Day 2
-        # prices_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
-        # orders_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
-        # storage_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses)
-        # send_receive_day_2 = Array{Float64}(undef, num_reduced, number_of_warehouses, number_of_warehouses)
-
-        # for s in 1:num_reduced
-        #     for w in 1:number_of_warehouses
-        #         prices_day_2[s, w] = value(price_scenarios[s, w])
-        #         orders_day_2[s, w] = value(x_wt_scen[w, s])
-        #         storage_day_2[s, w] = value(z_wt_scen[w, s])
-        #         for q in 1:number_of_warehouses
-        #             send_receive_day_2[s, w, q] = value(y_send_wqt_scen[w, q, s])
-        #         end
-        #     end
-        # end
         
         system_cost = objective_value(model_1d)
         println("Total system cost: ", system_cost)
