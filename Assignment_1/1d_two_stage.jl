@@ -28,7 +28,7 @@ function Scenario_generation(p_wt, S, number_of_warehouses, num_reduced, plots=t
     #Initialize equiprobable probabilities
     probabilities = repeat([1.0/S], 1, S)[1,:]
     # Use fast forward selection and apply it to get the reduced scenarios and updated probabilities
-    include("fast-forward-selection.jl")
+    include("V2_Assignment_A_codes/fast-forward-selection.jl")
     result = FastForwardSelection(D, probabilities, num_reduced)
     #Resulting probabilities
     reduced_probabilities = result[1]

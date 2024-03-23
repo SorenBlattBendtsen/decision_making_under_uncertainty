@@ -13,32 +13,6 @@ include("V2_Assignment_A_codes/V2_02435_two_stage_problem_data.jl")
 include("V2_Assignment_A_codes/V2_simulation_experiments.jl")
 include("V2_Assignment_A_codes/V2_price_process.jl")
 
-
-# Function that takes the inital price and calculates the expected price for 1000 samples using sample_next
-# function calculate_expected_prices(current_prices,number_of_sim_periods)
-#     num_samples = if number_of_sim_periods == 3
-#         1500
-#     elseif number_of_sim_periods in [4, 5]
-#         1500
-#     elseif number_of_sim_periods ==2
-#         1200
-#     else
-#         error("Unsupported simulation period")
-#     end
-
-#     expected_price = zeros(number_of_warehouses)  # Initialize expected prices matrix
-#     for w in 1:number_of_warehouses
-#         initial_prices = current_prices[w]  # Extract initial prices as a scalar or vector
-#         expected_price_tmp = 0.0  # Initialize as a scalar
-#         for i in 1:num_samples
-#             price_sample = sample_next(initial_prices)  # Use initial prices as input to sample_next
-#             expected_price_tmp += price_sample
-#         end
-#         expected_price_tmp /= num_samples  # Average over samples
-#         expected_price[w] = expected_price_tmp  # Assign expected prices back to the main matrix
-#     end
-#     return expected_price
-# end
 function calculate_expected_price(current_prices, number_of_warehouses, T_lookahead, S_samples)
     # Initialize the output matrix
     price_scenarios = zeros(Float64, number_of_warehouses, T_lookahead, S_samples)

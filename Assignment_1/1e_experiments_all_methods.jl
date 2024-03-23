@@ -49,7 +49,7 @@ num_reduced_values = [5, 20, 50]
 
 # Include 1b, 1c and 1d:
 include("1c_optimality_in_hindsight.jl")
-include("1b Expected Value.jl")
+include("1b_expected_value.jl")
 include("1d_two_stage.jl")
 # Loop through all experiments and calculate system costs for each method
 oih_system_costs = zeros(number_of_experiments)

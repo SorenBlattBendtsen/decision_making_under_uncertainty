@@ -6,10 +6,9 @@
 
 
 # Including your policy and the dummy policy
-include("../02435_multistage_policy_final.jl")
+include("../02435_multistage_policy.jl")
 # Including the EV policy
-#include("../EV LookAhead.jl")
-#include("02435_multistage_policy_TestThingsHere.jl")
+#include("../2_ev_look_ahead.jl")
 include("V2_dummy_policy.jl")
 
 include("V2_02435_multistage_problem_data.jl")

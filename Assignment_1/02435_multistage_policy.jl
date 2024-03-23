@@ -1,376 +1,289 @@
-# Combined Multi-Stage Stochastic Problem Policy in Julia
+# File: 02435_multistage_policy.jl
 
-# Initialization and Data Loading
-using JuMP, Gurobi
+using JuMP
+using Gurobi
 using Distributions
 using Random
-# including "V2_02435_multistage_problem_data.jl" starts here
-function load_the_data()
+using Plots
+# Set seed for reproducibility
+Random.seed!(1234)
+# Load data and functions from other files
+include("V2_Assignment_A_codes/V2_02435_multistage_problem_data.jl")
+include("V2_Assignment_A_codes/fast-forward-selection.jl")
+include("V2_Assignment_A_codes/V2_price_process.jl")
 
-    number_of_warehouses = 3
-    W = collect(1:number_of_warehouses)
-
-    number_of_simulation_periods = 5
-    sim_T = collect(1:number_of_simulation_periods)
-
-    #Cost of missing demand at w
-    #Call by cost_miss[w]
-    cost_miss = [10,15,20]
-
-    #Distance-based transportation cost for each pair of warehouses w1 and w2
-    #Call by cost_tr[w1,w2]
-    cost_tr = ones(number_of_warehouses, number_of_warehouses)*5
-
-    #Capacity of warehouse w
-    warehouse_capacities = 10*ones(number_of_warehouses)
-
-    #Capacity of the transportation link for each pair of warehouses
-    #Call by transport_capacities[w1,w2]
-    transport_capacities = 4*ones(number_of_warehouses, number_of_warehouses)
-    transport_capacities[3,1] = 0
-    transport_capacities[1,3] = 0
-    for w in W
-        for q in W
-            if w == q
-                transport_capacities[w,q] = 0
-            end
-        end
-    end
-
-    #Initial stock of at w
-    initial_stock = 2*ones(number_of_warehouses)
-
-    demand_trajectory = 4*ones(number_of_warehouses, number_of_simulation_periods)
-
-    return number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, demand_trajectory
-end
-
-#end  # End of module # including "V2_02435_multistage_problem_data.jl" ends here
-
-
-# including "V2_price_process.jl" starts here 
-
-using Distributions
-
-function sample_next(previous_point)
-
-    sample = previous_point + rand(Gamma(1.0, 2.0))*rand(Normal((5 - previous_point)*0.3, 1))
-    
-    if sample < 0
-        sample = 0
-    end
-
-    if sample > 10
-        sample = 10
-    end
-
-    rand_num = rand()
-
-    if rand_num < 0.9
-        price_sample = sample
-    else
-        price_sample = 10
-    end
-
-    return price_sample
-
-end
-
-# including "V2_price_process.jl" ends here 
-
-# Load data and define constants
-number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock, number_of_simulation_periods, sim_T, demand_trajectory = load_the_data()
-const NUM_SCENARIOS = 1000
-const NUM_WAREHOUSES = number_of_warehouses
-const NUM_STAGES = number_of_simulation_periods
-const DISCRETE_PRICE_LEVELS = [0.0, 2.5, 5.0, 7.5, 10.0]
-const TARGET_NUM_SCENARIOS = 50
-
-# Scenario Generation and Discretization
-function generate_scenarios(num_scenarios, num_stages, num_warehouses)
-    price_scenarios = zeros(num_warehouses, num_stages, num_scenarios)
-    for s in 1:num_scenarios
-        for t in 1:num_stages
-            for w in 1:num_warehouses
-                price_scenarios[w, t, s] = t == 1 ? initial_stock[w] : sample_next(price_scenarios[w, t-1, s])
-            end
-        end
-    end
-    return price_scenarios
-end
-initial_price_scenarios = generate_scenarios(NUM_SCENARIOS, NUM_STAGES, NUM_WAREHOUSES)
-
-# Function to discretize all prices in the scenarios
-function discretize_all_prices(prices::Array{Float64,3}, discrete_levels::Array{Float64,1})
-    num_warehouses, num_stages, num_scenarios = size(prices)
-    discretized_prices = copy(prices)
-    
-    for w in 1:num_warehouses
-        for t in 1:num_stages
-            for s in 1:num_scenarios
-                # Find the closest discrete level for each price
-                _, nearest_index = findmin(abs.(discrete_levels .- prices[w, t, s]))
-                discretized_prices[w, t, s] = discrete_levels[nearest_index]
-            end
-        end
-    end
-    
-    return discretized_prices
-end
-
-
-discretized_price_scenarios = discretize_all_prices(initial_price_scenarios, DISCRETE_PRICE_LEVELS)
-
-# Including Fast-Forward Selection for Scenario Reduction
-# including "fast-forward-selection.jl" starts here 
-
-#Performs fast forward selection for the given parameters
-#D = Symmetric distance matrix
-#p = vector of probabilities
-#n = target number of scenarios
-#Returns Array with 2 element, [1] = list of probabilities, [2] = list of selected scenario indices
-function FastForwardSelection(D, p, n)
-    init_d = D
-    not_selected_scenarios = collect(range(1,length(D[:,1]);step=1))
-    selected_scenarios = []
-    while length(selected_scenarios) < n
-        selected = select_scenario(D, p, not_selected_scenarios)
-        deleteat!(not_selected_scenarios, findfirst(isequal(selected), not_selected_scenarios))
-        push!(selected_scenarios, selected)
-        D = UpdateDistanceMatrix(D, selected, not_selected_scenarios)
-    end
-    result_prob = RedistributeProbabilities(D, p, selected_scenarios, not_selected_scenarios)
-    return [result_prob, selected_scenarios]
-end
-
-#Redistributes probabilities at the end of the fast forward selection
-#D = original distance matrix
-#p = probabilities
-#selected_scenarios = indices of selected scenarios
-#not_selected_scenarios = indices of non selected scenarios
-function RedistributeProbabilities(D, p, selected_scenarios, not_selected_scenarios)
-    probabilities = p
-    for s in not_selected_scenarios
-        min_idx = -1
-        min_dist = Inf
-        for i in selected_scenarios
-            if D[s,i] < min_dist
-                min_idx = i
-                min_dist = D[s,i]
-            end
-        end
-        probabilities[min_idx] = probabilities[min_idx] + p[s]
-        probabilities[s] = 0.0
-    end
-    new_probabilities = [probabilities[i] for i in selected_scenarios]
-    return new_probabilities
-end
-
-#Updates the distance matrix in the fast forward selection
-#D = current distance matrix
-#selected = index of scenario selected in this iteration
-#scenarios = index list of not selected scenarios
-function UpdateDistanceMatrix(D, selected, not_selected_scenarios)
-    for s in not_selected_scenarios
-        if s!=selected
-            for s2 in not_selected_scenarios
-                if s2!=selected
-                    D[s,s2] = min(D[s,s2], D[s,selected])
-                end
-            end
-        end
-    end
-    return D
-end
-
-#Selects the scenario idx with minimum Kantorovic distance
-#D = Distance matrix
-#p = probabilities
-#scenarios = not selected scenarios
-function select_scenario(D, p, not_selected_scenarios)
-    min_dist = Inf
-    min_idx = -1
-    for s in not_selected_scenarios
-        dist = sum(p[s2]*D[s2,s] for s2 in not_selected_scenarios if s!=s2)
-        if dist < min_dist
-            min_dist = dist
-            min_idx = s
-        end
-    end
-    return min_idx
-end
-# including the fast forward selection file ends here
-
-# Function to calculate distance matrix for scenario reduction
-function calculate_distance_matrix(prices::Array{Float64,3})
-    _, _, num_scenarios = size(prices)
-    D = zeros(num_scenarios, num_scenarios)
-    for i in 1:num_scenarios
-        for j in 1:num_scenarios
-            if i != j
-                # Calculating the Euclidean distance between the price trajectories of two scenarios
-                distance = 0.0
-                for t in 1:size(prices, 2)  # Iterate over all time stages
-                    for w in 1:size(prices, 1)  # Iterate over all warehouses
-                        distance += (prices[w, t, i] - prices[w, t, j])^2
+# Define the function to generate price scenarios
+function generate_price_scenarios(current_prices, number_of_warehouses, T_lookahead, S_samples)
+    # Initialize the output matrix
+    price_scenarios = zeros(Float64, number_of_warehouses, T_lookahead, S_samples)
+    # Depending on the number of stages, fill the price scenarios matrix accordingly.
+    # Always use the price from the previous stage to sample the next price
+    sqrt_S = ceil(Int, sqrt(S_samples))
+    if T_lookahead == 5 
+        for w in 1:number_of_warehouses
+            for s in 1:S_samples
+                for t in 1:T_lookahead
+                    if t == 1
+                        price_scenarios[w, t, s] = current_prices[w] # Stage 1 price is the current price for all scenarios
+                    elseif t == 2
+                        if s <= ceil(Int, sqrt(sqrt(sqrt_S)))
+                            price_scenarios[w, t, s] = sample_next(current_prices[w]) # Sample a new price for the first sqrt(sqrt(sqrt(S))) scenarios
+                        else
+                            price_scenarios[w, t, s] = price_scenarios[w, t, s-ceil(Int, sqrt(sqrt(sqrt_S)))] # Use the same price as the previous sqrt(sqrt(sqrt(S))) scenarios
+                        end 
+                    elseif t == 3
+                        if s <= ceil(Int, sqrt(sqrt_S))
+                            price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) # Sample a new price for the first sqrt(sqrt(S)) scenarios
+                        else
+                            price_scenarios[w, t, s] = price_scenarios[w, t, s-ceil(Int, sqrt(sqrt_S))] # Use the same price as the previous sqrt(sqrt(S)) scenarios
+                        end 
+                    elseif t == 4
+                        if s <= sqrt_S
+                            price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) # Sample a new price for the first sqrt(S) scenarios
+                        else
+                            price_scenarios[w, t, s] = price_scenarios[w, t, s-sqrt_S] # Use the same price as the previous sqrt(S) scenarios
+                        end 
+                    else
+                        price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) # Sample a new unique price for all scenarios
                     end
                 end
-                D[i, j] = sqrt(distance)
+            end
+        end
+    elseif T_lookahead == 4
+        for w in 1:number_of_warehouses
+            for s in 1:S_samples
+                for t in 1:T_lookahead
+                    if t == 1
+                        price_scenarios[w, t, s] = current_prices[w] 
+                    elseif t == 2
+                        if s <= ceil(Int, sqrt(sqrt_S))
+                            price_scenarios[w, t, s] = sample_next(current_prices[w])
+                        else
+                            price_scenarios[w, t, s] = price_scenarios[w, t, s-ceil(Int,sqrt(sqrt_S))]
+                        end 
+                    elseif t == 3
+                        if s <= sqrt_S
+                            price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s])
+                        else
+                            price_scenarios[w, t, s] = price_scenarios[w, t, s-sqrt_S]
+                        end 
+                    else
+                        price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s]) 
+                    end
+                end
+            end
+        end
+    elseif T_lookahead == 3
+        for w in 1:number_of_warehouses
+            for s in 1:S_samples
+                for t in 1:T_lookahead
+                    if t == 1
+                        price_scenarios[w, t, s] = current_prices[w] 
+                    elseif t == 2
+                        if s <= sqrt_S
+                            price_scenarios[w, t, s] = sample_next(current_prices[w])
+                        else
+                            price_scenarios[w, t, s] = price_scenarios[w, t, s-sqrt_S]
+                        end 
+                    else
+                        price_scenarios[w, t, s] = sample_next(price_scenarios[w, t-1, s])
+                    end
+                end
+            end
+        end
+    elseif T_lookahead == 2
+        for w in 1:number_of_warehouses
+            for s in 1:S_samples
+                for t in 1:T_lookahead
+                    if t == 1
+                        price_scenarios[w, t, s] = current_prices[w] 
+                    else
+                        price_scenarios[w, t, s] = sample_next(current_prices[w])
+                    end
+                end
+            end
+        end
+    else # T == 1
+        for w in 1:number_of_warehouses
+            for s in 1:S_samples
+                for t in 1:T_lookahead
+                    price_scenarios[w, t, s] = current_prices[w] 
+                end
             end
         end
     end
-    return D
-end
-
-
-distance_matrix = calculate_distance_matrix(discretized_price_scenarios)
-initial_probabilities = fill(1.0 / NUM_SCENARIOS, NUM_SCENARIOS)
-new_probabilities, selected_indices = FastForwardSelection(distance_matrix, initial_probabilities, TARGET_NUM_SCENARIOS)
-reduced_price_scenarios = discretized_price_scenarios[:, :, selected_indices]
-
-# Optimization Problem Setup
-model = Model(Gurobi.Optimizer)
-@variable(model, x[w=1:NUM_WAREHOUSES, t=1:NUM_STAGES, s=1:TARGET_NUM_SCENARIOS] >= 0)
-@variable(model, z[w=1:NUM_WAREHOUSES, t=1:NUM_STAGES, s=1:TARGET_NUM_SCENARIOS] >= 0)
-@variable(model, y_send[w=1:NUM_WAREHOUSES, q=1:NUM_WAREHOUSES, t=1:NUM_STAGES, s=1:TARGET_NUM_SCENARIOS] >= 0)
-@variable(model, m[w=1:NUM_WAREHOUSES, t=1:NUM_STAGES, s=1:TARGET_NUM_SCENARIOS] >= 0)
-
-# Constraints Definition
-
-# Inventory Balance Constraints
-@constraint(model, balance[w=1:NUM_WAREHOUSES, t=2:NUM_STAGES, s=1:TARGET_NUM_SCENARIOS], 
-    z[w, t, s] == z[w, t-1, s] + x[w, t, s] - sum(y_send[w, q, t, s] for q=1:NUM_WAREHOUSES) + 
-    sum(y_send[q, w, t, s] for q=1:NUM_WAREHOUSES) - m[w, t, s])
-
-# Demand Fulfillment Constraints
-@constraint(model, demand_fulfillment[w=1:NUM_WAREHOUSES, t=1:NUM_STAGES, s=1:TARGET_NUM_SCENARIOS],
-    x[w, t, s] + z[w, t, s] + sum(y_send[q, w, t, s] for q=1:NUM_WAREHOUSES) - 
-    sum(y_send[w, q, t, s] for q=1:NUM_WAREHOUSES) - m[w, t, s] == demand_trajectory[w, t])
-
-# Transportation Capacity Constraints
-@constraint(model, transportation[w=1:NUM_WAREHOUSES, q=1:NUM_WAREHOUSES, t=1:NUM_STAGES, s=1:TARGET_NUM_SCENARIOS],
-    y_send[w, q, t, s] <= transport_capacities[w, q])
-
-# Storage Capacity Constraints
-@constraint(model, storage[w=1:NUM_WAREHOUSES, t=1:NUM_STAGES, s=1:TARGET_NUM_SCENARIOS],
-    z[w, t, s] <= warehouse_capacities[w])
-
-# Non-Negativity and Initial Conditions
-@constraint(model, initial_inventory[w=1:NUM_WAREHOUSES, s=1:TARGET_NUM_SCENARIOS], 
-    z[w, 1, s] == initial_stock[w])  # Setting initial inventory levels
-
-# Ensuring decisions for coffee sent between the same warehouse are zero
-@constraint(model, no_self_send[w=1:NUM_WAREHOUSES, t=1:NUM_STAGES, s=1:TARGET_NUM_SCENARIOS],
-    y_send[w, w, t, s] == 0)
-
-# Ensuring initial orders and unmet demands at the start are zero (if necessary)
-@constraint(model, initial_orders_and_shortages[s=1:TARGET_NUM_SCENARIOS], 
-    sum(x[w, 1, s] for w=1:NUM_WAREHOUSES) + sum(m[w, 1, s] for w=1:NUM_WAREHOUSES) == 0)
-
-
-# Objective Function and Non-Anticipativity Constraints
-
-# Objective Function: Minimize total expected costs
-@objective(model, Min, 
-    sum(new_probabilities[s] * (cost_miss[w] * m[w, t, s] + 
-    sum(cost_tr[w, q] * y_send[w, q, t, s] for q = 1:NUM_WAREHOUSES) +
-    sum(cost_tr[q, w] * y_send[q, w, t, s] for q = 1:NUM_WAREHOUSES) +
-    x[w, t, s] * reduced_price_scenarios[w, t, s]) for w = 1:NUM_WAREHOUSES, t = 1:NUM_STAGES, s = 1:TARGET_NUM_SCENARIOS))
-
-# Dummy function for generating non-anticipativity sets based on reduced scenarios
-function generate_non_anticipativity_sets(num_stages, num_scenarios, reduced_scenarios)
-    # Initialize a dictionary to store non-anticipativity sets for each stage
-    non_anticipativity_sets = Dict{Int, Array{Set{Int}, 1}}()
-    
-    # For each stage, determine which scenarios share the same information up to that stage
-    for t in 1:num_stages
-        sets_at_t = Array{Set{Int}, 1}()
-        already_grouped = Set{Int}()
         
-        for s in 1:num_scenarios
-            if s in already_grouped
-                continue
-            end
-            # Start a new group with the current scenario
-            current_set = Set{Int}([s])
-            for other_s in s+1:num_scenarios
-                # Compare reduced_scenarios[s] and reduced_scenarios[other_s] up to stage t
-                # If they match, add other_s to the current_set
-                if all(reduced_scenarios[:, 1:t, s] .== reduced_scenarios[:, 1:t, other_s])
-                    push!(current_set, other_s)
-                    push!(already_grouped, other_s)
-                end
-            end
-            push!(sets_at_t, current_set)
-        end
-        non_anticipativity_sets[t] = sets_at_t
-    end
-    return non_anticipativity_sets
+    return price_scenarios
 end
 
-# Generate non-anticipativity sets based on the reduced scenarios
-non_anticipativity_sets = generate_non_anticipativity_sets(NUM_STAGES, TARGET_NUM_SCENARIOS, reduced_price_scenarios)
-
-
-# Non-Anticipativity Constraints
-# Ensuring decisions made based on the same information up to time t are the same across all scenarios that share this information
-for t in 1:NUM_STAGES
-    for na_set in non_anticipativity_sets[t]  # Assuming non_anticipativity_sets have been prepared as discussed
-        for w in 1:NUM_WAREHOUSES
-            # Get a reference scenario from the set
-            ref_scenario = first(collect(na_set))
-            # Apply non-anticipativity by forcing decision variables to be equal for all scenarios in the set
-            for other_scenario in setdiff(collect(na_set), [ref_scenario])
-                @constraint(model, x[w, t, other_scenario] == x[w, t, ref_scenario])
-                @constraint(model, m[w, t, other_scenario] == m[w, t, ref_scenario])
-                for q in 1:NUM_WAREHOUSES
-                    @constraint(model, y_send[w, q, t, other_scenario] == y_send[w, q, t, ref_scenario])
-                end
-            end
+# Define the function to reduce the number of scenarios using FFS
+function reduce_scenarios(price_scenarios, S_reduced, T_lookahead)
+    # Calculate distance matrix (euclidean distance) for scenario reduction
+    B = size(price_scenarios, 3)
+    D = zeros(Float64, B, B)
+    for i = 1:B
+        for j = 1:B
+            D[i,j] = sqrt(sum((price_scenarios[l,end,i]-price_scenarios[l,end,j])*(price_scenarios[l,end,i]-price_scenarios[l,end,j])  for l = 1:number_of_warehouses))
         end
     end
+
+    # Initialize equiprobable probabilities
+    probabilities = repeat([1.0/B], 1, B)[1,:]
+    # Use fast forward selection and apply it to get the reduced scenarios and updated probabilities
+    result = FastForwardSelection(D, probabilities, S_reduced)
+    # Resulting probabilities
+    reduced_probabilities = result[1]
+    # Selected scenario indices
+    reduced_scenario_indices = result[2]
+    # Filter price_scenarios based on reduced_scenario_indices
+    reduced_price_scenarios = zeros(Float64, number_of_warehouses, T_lookahead, S_reduced)
+    
+    for i = 1:S_reduced
+        reduced_price_scenarios[:,:,i] = price_scenarios[:,:,reduced_scenario_indices[i]]
+    end
+
+    return reduced_price_scenarios, reduced_probabilities, reduced_scenario_indices
+end
+
+# Define the function to find the indices of the same price scenarios per stage, used for non-anticipativity constraints
+function same_price_indices_per_stage(reduced_price_scenarios, T_lookahead, S_reduced)
+    # Initialize the output matrix
+    same_price_indices = zeros(Int, T_lookahead, S_reduced)
+    for t in 1:T_lookahead
+        for s in 1:S_reduced
+            same_price_indices[t, s] = findall(x -> x == reduced_price_scenarios[1, t, s], reduced_price_scenarios[1, t, :])[1]
+        end
+    end
+    return same_price_indices
 end
 
 
-# Optimization Execution and Solution Extraction
-optimize!(model)
-if termination_status(model) == MOI.OPTIMAL
-    println("Optimal solution found!")
-    # (Insert solution extraction and analysis code, as outlined in Part 5.)
-else
-    println("Optimal solution not found. Status: ", termination_status(model))
-end
+# Define the function to plot the reduced price scenarios
+function plot_reduced_scenarios(price_scenarios, reduced_scenario_indices, num_reduced, number_of_warehouses, W)
+    p_wt_scenarios_t = transpose(price_scenarios[:,3,:])
+    plot(price_scenarios[:,3,:], xlabel="Warehouse", ylabel="Price", title="Reduced price scenarios", color=:lightgray, legend=false, alpha=0.8, xticks=(1:number_of_warehouses, W))
+    # plot reduced scenarios
+    reduced_data = zeros(Float64, number_of_warehouses, num_reduced)
+    for i = 1:num_reduced
+        reduced_data[:, i] = price_scenarios[:,3,reduced_scenario_indices[i]]
+    end
+    plot!(reduced_data, legend=false, color=:auto)
+end 
 
-# Solution Analysis and Finalization
+# Define the function to make a multistage here and now decision
+function make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices, current_demands)
+    # Get relevant input data
+    S_samples = 1500
+    S_reduced = 80
+    T_lookahead = min(number_of_sim_periods-tau+1, 3)
+    W = collect(1:number_of_warehouses)
+    T = collect(1:T_lookahead)
+    S = collect(1:S_reduced)
+    price_scenarios = generate_price_scenarios(current_prices, number_of_warehouses, T_lookahead, S_samples)
+    reduced_price_scenarios, reduced_probabilities, reduced_scenario_indices = reduce_scenarios(price_scenarios, S_reduced, T_lookahead)
+    same_price_indices = same_price_indices_per_stage(reduced_price_scenarios, T_lookahead, S_reduced)
+    # Define the optimization model
+    model_2 = Model(Gurobi.Optimizer)
+    # variables
+    @variable(model_2, 0 <= x_wts[w in W, t in T, s in S]) # Coffee ordered at warehouse w
+    @variable(model_2, 0 <= z_wts[w in W, t in T, s in S]) # Coffee stored at warehouse w
+    @variable(model_2, 0 <= y_send_wqts[w in W, q in W, t in T, s in S]) # Coffee sent from warehouse w to warehouse q
+    @variable(model_2, 0 <= y_receive_wqts[w in W, q in W, t in T, s in S]) # Coffee received at warehouse w from warehouse q
+    @variable(model_2, 0 <= m_wts[w in W, t in T, s in S]) # Missing demand at warehouse w
 
-# Check if an optimal solution has been found and extract it
-if termination_status(model) == MOI.OPTIMAL
-    # Extracting decision variables
-    optimal_orders = getvalue.(x)  # Coffee ordered in optimal solution
-    optimal_inventory = getvalue.(z)  # Inventory levels in optimal solution
-    optimal_send = getvalue.(y_send)  # Coffee sent between warehouses in optimal solution
-    optimal_shortages = getvalue.(m)  # Unmet demand in optimal solution
+    @objective(model_2, Min, 
+                            sum(reduced_probabilities[s] 
+                            * (sum(cost_tr[w,q]*y_send_wqts[w,q,t,s] for w in W, q in W, t in T) 
+                            + sum(cost_miss[w]*m_wts[w,t,s] for w in W, t in T)
+                            + sum(reduced_price_scenarios[w,t,s]*x_wts[w,t,s] for w in W, t in T))
+                            for s in S))
 
-    # Printing out some of the solutions for inspection
-    println("Optimal Orders: ", optimal_orders)
-    println("Optimal Inventory Levels: ", optimal_inventory)
-    println("Optimal Coffee Sent Between Warehouses: ", optimal_send)
-    println("Optimal Shortages: ", optimal_shortages)
+    # constraints
+    # Demand balance
+    @constraint(model_2, demand_1[w in W, s in S],
+                x_wts[w,1,s] - z_wts[w,1,s] + current_stock[w]
+                + sum(y_receive_wqts[w,q,1,s] for q in W)
+                - sum(y_send_wqts[w,q,1,s] for q in W)
+                + m_wts[w,1,s] == current_demands[w])
 
-    # Post-optimization analysis or additional steps could be performed here
-    # For example, calculating total costs, preparing reports, etc.
-else
-    println("Optimal solution not found. Status: ", termination_status(model))
-end
+    @constraint(model_2, demand_t[w in W, t in T[2:end], s in S],
+                x_wts[w,t,s] - z_wts[w,t,s] + z_wts[w,t-1,s]
+                + sum(y_receive_wqts[w,q,t,s] for q in W)
+                - sum(y_send_wqts[w,q,t,s] for q in W)
+                + m_wts[w,t,s] == current_demands[w])
 
-# If you need to use the solution outside of this script, you can save it to files or prepare it for visualization.
-# For example:
-# CSV.write("optimal_orders.csv", DataFrame(optimal_orders))
-# Make sure to include necessary packages and adjust paths/names as needed.
+    # Storage capacity
+    @constraint(model_2, storage_capacity[w in W, t in T, s in S],
+                z_wts[w,t,s] <= warehouse_capacities[w])
 
-# Final cleanup or post-processing can be done below
-println("Policy execution complete. Check the outputs and validate against constraints and expectations.")
+    # Transportation capacity
+    @constraint(model_2, transportation_capacity[w in W, q in W, t in T, s in S],
+                y_send_wqts[w,q,t,s] <= transport_capacities[w,q])
 
-# Optional: Comparing the policy's performance against the dummy policy, if required
-# This could involve setting up a comparison based on total costs, service levels, or other KPIs defined in your problem.
+    # Constraint saying the amount sent from w to q is the same as received at q from w
+    @constraint(model_2, send_receive_1[w in W, q in W, t in T, s in S], 
+                y_send_wqts[w,q,t,s] == y_receive_wqts[q,w,t,s])
 
+    #Storage one day before transfer, initial stock in t=1
+    @constraint(model_2, storage_1[w in W, q in W, s in S],
+                y_send_wqts[w,q,1,s] <= current_stock[w])
+
+    @constraint(model_2, storage_t[w in W, q in W, t in T[2:end], s in S],
+                y_send_wqts[w,q,t,s] <= z_wts[w,t-1,s])
+
+    # Non anticipativity constraints for stage all stages
+    @constraint(model_2, non_anticipativity_x[w in W, t in T, s in S],
+                x_wts[w,t,s] == x_wts[w,t,same_price_indices[t,s]])
+
+    @constraint(model_2, non_anticipativity_z[w in W, t in T, s in S],
+                z_wts[w,t,s] == z_wts[w,t,same_price_indices[t,s]])
+
+    @constraint(model_2, non_anticipativity_y_send[w in W, q in W, t in T, s in S],
+                y_send_wqts[w,:,t,s] .== y_send_wqts[w,:,t,same_price_indices[t,s]])
+
+    @constraint(model_2, non_anticipativity_y_receive[w in W, q in W, t in T, s in S],
+                y_receive_wqts[w,:,t,s] .== y_receive_wqts[w,:,t,same_price_indices[t,s]])
+
+    @constraint(model_2, non_anticipativity_m[w in W, t in T, s in S],
+                m_wts[w,t,s] == m_wts[w,t,same_price_indices[t,s]])
+
+
+    optimize!(model_2)
+
+    # Print the objective value and the optimal solution for the first stage variables
+    if termination_status(model_2) == MOI.OPTIMAL
+        println("Optimal solution found")
+        #println("Time period: ", tau)
+        println("Total number of decision variables: ", num_variables(model_2))
+        println("Objective value: ", objective_value(model_2))
+        #println("Here and now decision:")
+        # Store here and now decisions
+        x = value.(x_wts[:,1,1])
+        send = value.(y_send_wqts[:,:,1,1])
+        receive = value.(y_receive_wqts[:,:,1,1])
+        z = value.(z_wts[:,1,1])
+        m = value.(m_wts[:,1,1])
+    end
+    return x, send, receive, z, m
+end 
+
+# Example usage
+# number_of_warehouses, W, cost_miss, cost_tr, warehouse_capacities, transport_capacities, initial_stock = load_the_data()
+# current_prices = zeros(number_of_warehouses)
+# for w in W
+#     current_prices[w] = round.(rand(Uniform(0,10)), digits=2)
+# end
+# current_demands = 4*ones(number_of_warehouses)
+# tau = 1
+# number_of_sim_periods = 5
+# current_stock = initial_stock
+
+# x = Dict()
+# send = Dict()
+# receive = Dict()
+# z = Dict()
+# m = Dict()
+
+# @time begin
+#     x, send, receive, z, m = make_multistage_here_and_now_decision(number_of_sim_periods, tau, current_stock, current_prices, current_demands)
+# end 
